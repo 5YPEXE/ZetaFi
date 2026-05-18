@@ -180,27 +180,71 @@ const fetchLiveNews = async (name: string, symbol: string): Promise<NewsItem[]> 
 const POS_KW = ['yükseliş','yükseldi','artış','arttı','rekor','pozitif','güçlü','destekliyor','iyimser','talep','alım','büyüme','kazanç','onay','patlama','toparlanma','rally','surge','bullish','gain','high','boost','profit','growth','teşvik','hızlandı','toplamaya','artıyor','hedef fiyat','bedelsiz','açık standart','kar','temettü','ihracat','verimli','dönüşüm','stratejik','ortaklık','genişleme','ralli','sıçrama','yükselen','güçleniyor','kârlılık','potansiyel','fırsat','upgrade','outperform','beat','exceed','strong','recovery','breakout','momentum','uptick','optimistic'];
 const NEG_KW = ['düşüş','düştü','azalış','kayıp','negatif','zayıf','baskı','endişe','risk','satış','kriz','çöküş','gerileme','crash','drop','bearish','loss','decline','fall','fear','selloff','düzeltme','sert','gerilim','oynaklık','tehdit','yasak','ceza','soruşturma','hack','iflas','daralma','küçülme','zarar','borç','temerrüt','resesyon','enflasyon','faiz artışı','belirsizlik','kaçış','panik','durgunluk','downgrade','underperform','miss','weak','correction','plunge','slump','concern','warning','volatile','pressure'];
 
-const analyzeNews = (items: NewsItem[]) => {
+const analyzeNews = async (items: NewsItem[], symbol: string) => {
+  if (items.length === 0) return { score: 0, pos: 0, neg: 0, neutral: 0 };
+  
+  try {
+    const res = await fetch('/api/analyze-sentiment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ headlines: items.map(i => i.title), symbol })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { score: data.score, pos: data.pos, neg: data.neg, neutral: data.neutral };
+    }
+  } catch (e) { console.warn("Gemini API failed, using local NLP."); }
+
+  // Fallback to local keyword heuristic
   let pos = 0, neg = 0;
   items.forEach(i => { const l = i.title.toLowerCase(); const p = POS_KW.filter(k => l.includes(k)).length; const n = NEG_KW.filter(k => l.includes(k)).length; if (p > n) pos++; else if (n > p) neg++; });
   const total = Math.max(1, items.length);
   return { score: ((pos - neg) / total) * 100, pos, neg, neutral: items.length - pos - neg };
 };
 
-const analyzeTrend = (sparkline: { value: number }[]) => {
-  if (!sparkline || sparkline.length < 5) return { score: 0, dir: 'Yatay', support: 0, resistance: 0 };
-  const v = sparkline.map(s => s.value);
-  const half = Math.floor(v.length / 2);
-  const recentAvg = v.slice(half).reduce((a, b) => a + b, 0) / v.slice(half).length;
-  const olderAvg = v.slice(0, half).reduce((a, b) => a + b, 0) / v.slice(0, half).length;
-  const pct = ((recentAvg - olderAvg) / olderAvg) * 100;
-  return { score: Math.max(-100, Math.min(100, pct * 10)), dir: pct > 1 ? 'Yükseliş' : pct < -1 ? 'Düşüş' : 'Yatay', support: Math.min(...v), resistance: Math.max(...v) };
+const calculateSMA = (prices: number[], period: number) => {
+  if (!prices || prices.length < period) return prices[prices.length - 1] || 0;
+  const slice = prices.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
 };
 
-const analyzeMomentum = (c: number) => ({
-  score: Math.max(-100, Math.min(100, c * 12)),
-  rsi: c > 7 ? 'Aşırı Alım' : c > 3 ? 'Güçlü Alım' : c < -7 ? 'Aşırı Satım' : c < -3 ? 'Güçlü Satım' : 'Nötr'
-});
+const calculateRSI = (prices: number[], period: number = 14) => {
+  if (!prices || prices.length <= period) return 50;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = prices[i] - prices[i - 1];
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  for (let i = period + 1; i < prices.length; i++) {
+    const diff = prices[i] - prices[i - 1];
+    avgGain = (avgGain * (period - 1) + Math.max(diff, 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(-diff, 0)) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - (100 / (1 + (avgGain / avgLoss)));
+};
+
+const analyzeTrend = (prices: number[]) => {
+  if (!prices || prices.length < 20) return { score: 0, dir: 'Yatay', support: 0, resistance: 0 };
+  const sma10 = calculateSMA(prices, 10);
+  const sma30 = calculateSMA(prices, 30);
+  const pct = ((sma10 - sma30) / sma30) * 100;
+  return { score: Math.max(-100, Math.min(100, pct * 15)), dir: pct > 1 ? 'Yükseliş' : pct < -1 ? 'Düşüş' : 'Yatay', support: Math.min(...prices), resistance: Math.max(...prices) };
+};
+
+const analyzeMomentum = (prices: number[], change24h: number) => {
+  const rsiVal = calculateRSI(prices);
+  // Score shifts based on RSI
+  const score = (rsiVal - 50) * 2; 
+  return {
+    score: Math.max(-100, Math.min(100, score)),
+    rsi: rsiVal > 70 ? 'Aşırı Alım' : rsiVal > 55 ? 'Güçlü Alım' : rsiVal < 30 ? 'Aşırı Satım' : rsiVal < 45 ? 'Güçlü Satım' : 'Nötr',
+    value: Math.round(rsiVal)
+  };
+};
 
 type Pred = { 
   sentiment: string; 
@@ -214,10 +258,9 @@ type Pred = {
   w1: number; m1: number; m3: number; w1P: number; m1P: number; m3P: number 
 };
 
-const predict = (name: string, price: number, change24h: number, newsItems: NewsItem[], sparkline: { value: number }[], forecastPct: number = 0): Pred => {
-  const ns = analyzeNews(newsItems);
-  const tr = analyzeTrend(sparkline);
-  const mo = analyzeMomentum(change24h);
+const predict = (name: string, price: number, change24h: number, newsItems: NewsItem[], historicalPrices: number[], forecastPct: number = 0, ns: any): Pred => {
+  const tr = analyzeTrend(historicalPrices);
+  const mo = analyzeMomentum(historicalPrices, change24h);
   
   const forecastScore = Math.max(-100, Math.min(100, forecastPct * 8));
   const forecastDir = forecastPct > 1 ? 'Yükseliş' : forecastPct < -1 ? 'Düşüş' : 'Yatay';
@@ -319,7 +362,7 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
       setIsNewsLive(live.length > 0);
       setNews(finalNews);
       
-      const ns = analyzeNews(finalNews);
+      const ns = await analyzeNews(finalNews, asset.symbol);
       
       // Time series forecast
       let forecastPct = 0;
@@ -333,16 +376,16 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
         forecastPct = ((last30 - lastReal) / lastReal) * 100;
       }
       // TÜM katmanlarla birlikte tahmin
-      setPred(predict(asset.name, asset.currentPrice, asset.change24h, finalNews, asset.sparkline || [], forecastPct));
+      setPred(predict(asset.name, asset.currentPrice, asset.change24h, finalNews, hist.prices, forecastPct, ns));
     };
     run();
     const t1 = setTimeout(() => setLoadingText("3 Farklı Kaynaktan Haberler Taranıyor..."), 800);
-    const t2 = setTimeout(() => setLoadingText("Gelişmiş NLP ile Duygu Analizi Yapılıyor..."), 1800);
-    const t3 = setTimeout(() => setLoadingText("90 Günlük Zaman Serisi Modeli Çalışıyor..."), 2800);
+    const t2 = setTimeout(() => setLoadingText("Gelişmiş AI NLP ile Duygu Analizi Yapılıyor..."), 1800);
+    const t3 = setTimeout(() => setLoadingText("RSI/SMA ve 90 Günlük Model Hesaplanıyor..."), 2800);
     const t4 = setTimeout(() => setLoadingText("4 Katmanlı Skor Birleştiriliyor..."), 3600);
     const t5 = setTimeout(() => setIsAnalyzing(false), 4200);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
-  }, [asset.currentPrice, asset.name, asset.symbol, asset.change24h]);
+  }, [asset.currentPrice, asset.name, asset.symbol, asset.change24h, asset.sparkline]);
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-background/90 backdrop-blur-sm">

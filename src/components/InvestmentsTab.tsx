@@ -5,8 +5,7 @@ import { RefreshCw, TrendingUp, TrendingDown, Search, X, Pickaxe, Building2, Coi
 import { LineChart, Line, YAxis, ResponsiveContainer } from 'recharts';
 import AIAnalyzerModal from './AIAnalyzerModal';
 
-// BIST100 artık API'dan dinamik olarak geliyor - sabit listeye gerek yok
-const STOCK_COLORS = ['#e11d48','#0284c7','#16a34a','#0f766e','#b91c1c','#1d4ed8','#dc2626','#475569','#2563eb','#ea580c','#0369a1','#1e3a8a','#7c3aed','#059669','#d97706','#be185d','#4f46e5','#0891b2','#65a30d','#c026d3'];
+const STOCK_COLORS = ['#e11d48', '#0284c7', '#16a34a', '#0f766e', '#b91c1c', '#1d4ed8', '#dc2626', '#475569', '#2563eb', '#ea580c', '#0369a1', '#1e3a8a', '#7c3aed', '#059669', '#d97706', '#be185d', '#4f46e5', '#0891b2', '#65a30d', '#c026d3'];
 
 const BASE_CRYPTOS = [
   { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', image: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png' },
@@ -99,12 +98,12 @@ export default function InvestmentsTab({
   const [commodities, setCommodities] = useState<Asset[]>([]);
   const [sparklines, setSparklines] = useState<Record<string, { value: number }[]>>({});
   const [usdRate, setUsdRate] = useState(32.5);
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [currency, setCurrency] = useState<'try' | 'usd'>('try');
   const [activeCategory, setActiveCategory] = useState<'crypto' | 'stocks' | 'commodities'>('crypto');
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Modal State
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [assetToAnalyze, setAssetToAnalyze] = useState<Asset | null>(null);
@@ -160,7 +159,7 @@ export default function InvestmentsTab({
         };
       });
       setCryptos(newCryptos);
-      
+
       if (isFirstLoad) {
         const firstSparklines: Record<string, { value: number }[]> = {};
         newCryptos.forEach(c => { firstSparklines[c.id] = generateMockSparkline(c.priceTry, 0.1); });
@@ -242,12 +241,12 @@ export default function InvestmentsTab({
   useEffect(() => {
     const tickInterval = setInterval(() => {
       const tick = (val: number, volatility: number = 0.0005) => val * (1 + (Math.random() - 0.5) * volatility);
-      
+
       setCryptos(prev => prev.map(c => ({ ...c, priceUsd: tick(c.priceUsd), priceTry: tick(c.priceTry) })));
       setStocks(prev => prev.map(s => ({ ...s, priceTry: tick(s.priceTry), priceUsd: tick(s.priceUsd) })));
       setCommodities(prev => prev.map(c => ({ ...c, priceTry: tick(c.priceTry), priceUsd: tick(c.priceUsd) })));
     }, 2000); // Her 2 saniyede bir ufak oynama
-    
+
     return () => clearInterval(tickInterval);
   }, []);
 
@@ -272,7 +271,7 @@ export default function InvestmentsTab({
     let list = cryptos;
     if (activeCategory === 'stocks') list = stocks;
     if (activeCategory === 'commodities') list = commodities;
-    
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(a => a.name.toLowerCase().includes(q) || a.symbol.toLowerCase().includes(q));
@@ -283,7 +282,7 @@ export default function InvestmentsTab({
   const handleAction = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAsset || !inputAmount) return;
-    
+
     const amountNum = parseFloat(inputAmount);
     let amountInTry = amountNum;
     if (currency === 'usd') amountInTry = amountNum * usdRate;
@@ -299,10 +298,10 @@ export default function InvestmentsTab({
     } else {
       const item = portfolio.find(p => p.coinId === selectedAsset.id);
       if (!item) return;
-      
+
       const currentPrice = getAssetPrice(selectedAsset.id, currency);
       const amountOfCoinToSell = amountNum / currentPrice;
-      
+
       if (amountOfCoinToSell > item.amount) {
         alert("Sahip olduğunuzdan daha fazla satamazsınız!");
         return;
@@ -360,10 +359,10 @@ export default function InvestmentsTab({
                 {portfolio.map(item => {
                   const currentPrice = getAssetPrice(item.coinId, currency);
                   const totalValue = item.amount * currentPrice;
-                  
+
                   const currentPriceTry = getAssetPrice(item.coinId, 'try');
                   const profitLossPercent = currentPriceTry > 0 ? ((currentPriceTry - item.averageBuyPrice) / item.averageBuyPrice) * 100 : 0;
-                  
+
                   return (
                     <div key={item.coinId} className="p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
                       <div>
@@ -388,7 +387,7 @@ export default function InvestmentsTab({
         <div className="xl:col-span-2">
           <h3 className="text-lg font-semibold mb-4">Tüm Piyasalar</h3>
           <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col h-[600px]">
-            
+
             {/* Header & Tabs */}
             <div className="p-4 border-b border-border bg-secondary/30">
               <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-4">
@@ -404,11 +403,11 @@ export default function InvestmentsTab({
                   </button>
                 </div>
               </div>
-              
+
               <div className="relative">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder={`${activeCategory === 'crypto' ? 'Bitcoin, Ethereum' : activeCategory === 'stocks' ? 'THYAO, ASELS' : 'Altın, Gümüş'} ara...`}
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
@@ -428,18 +427,18 @@ export default function InvestmentsTab({
                   const priceVal = currency === 'try' ? asset.priceTry : asset.priceUsd;
                   const priceStr = `${currencySymbol}${priceVal.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: currency === 'try' ? 2 : 4 })}`;
                   const isPositive = asset.change24h >= 0;
-                  
+
                   return (
                     <div key={asset.id} className="p-4 grid grid-cols-[auto_1fr_auto_auto] gap-4 items-center hover:bg-secondary/30 transition-colors">
                       <div className="flex items-center gap-3 w-32 md:w-48">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 relative overflow-hidden" style={{ backgroundColor: asset.color }}>
                           <span>{asset.symbol[0]}</span>
                           {asset.imageUrl && (
-                            <img 
-                              src={asset.imageUrl} 
-                              alt={asset.symbol} 
-                              className="w-full h-full object-contain absolute inset-0 bg-white p-1 rounded-full" 
-                              onError={(e) => { e.currentTarget.style.opacity = '0'; }} 
+                            <img
+                              src={asset.imageUrl}
+                              alt={asset.symbol}
+                              className="w-full h-full object-contain absolute inset-0 bg-white p-1 rounded-full"
+                              onError={(e) => { e.currentTarget.style.opacity = '0'; }}
                             />
                           )}
                         </div>
@@ -448,12 +447,12 @@ export default function InvestmentsTab({
                           <div className="text-xs text-muted-foreground truncate">{asset.name}</div>
                           {activeCategory === 'crypto' && asset.volume && asset.volume > 0 && (
                             <div className="text-[10px] text-primary/70 font-medium">
-                              Vol: ${asset.volume >= 1e9 ? (asset.volume/1e9).toFixed(1)+'B' : asset.volume >= 1e6 ? (asset.volume/1e6).toFixed(0)+'M' : asset.volume.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                              Vol: ${asset.volume >= 1e9 ? (asset.volume / 1e9).toFixed(1) + 'B' : asset.volume >= 1e6 ? (asset.volume / 1e6).toFixed(0) + 'M' : asset.volume.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                             </div>
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Mini Chart */}
                       <div className="h-10 w-full px-2 max-w-[120px] hidden md:block opacity-60 hover:opacity-100 transition-opacity min-h-[40px]">
                         {sparklines[asset.id] && (
@@ -474,11 +473,11 @@ export default function InvestmentsTab({
                         </div>
                         {activeCategory === 'crypto' && asset.high24h && asset.low24h && asset.high24h > 0 && (
                           <div className="text-[10px] text-muted-foreground mt-0.5 whitespace-nowrap">
-                            H: ${currency === 'try' ? (asset.high24h * usdRate).toLocaleString('tr-TR', {maximumFractionDigits: 0}) : asset.high24h.toLocaleString('en-US', {maximumFractionDigits: 2})} · L: ${currency === 'try' ? (asset.low24h * usdRate).toLocaleString('tr-TR', {maximumFractionDigits: 0}) : asset.low24h.toLocaleString('en-US', {maximumFractionDigits: 2})}
+                            H: ${currency === 'try' ? (asset.high24h * usdRate).toLocaleString('tr-TR', { maximumFractionDigits: 0 }) : asset.high24h.toLocaleString('en-US', { maximumFractionDigits: 2 })} · L: ${currency === 'try' ? (asset.low24h * usdRate).toLocaleString('tr-TR', { maximumFractionDigits: 0 }) : asset.low24h.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
                         <button onClick={() => setAssetToAnalyze(asset)} className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-white transition-colors" title="AI Analizi">
                           <Bot className="w-4 h-4" />
@@ -499,7 +498,7 @@ export default function InvestmentsTab({
       <AnimatePresence>
         {selectedAsset && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
@@ -521,21 +520,21 @@ export default function InvestmentsTab({
                   <label className="block text-xs font-medium text-muted-foreground mb-1">
                     {modalAction === 'buy' ? `Kaç ${currency.toUpperCase()}'lik almak istiyorsunuz?` : `Kaç ${currency.toUpperCase()}'lik satmak istiyorsunuz?`}
                   </label>
-                  <input 
-                    required 
-                    type="number" 
-                    step="0.01" 
-                    value={inputAmount} 
-                    onChange={e => setInputAmount(e.target.value)} 
-                    placeholder="0.00" 
-                    className="w-full bg-background border border-border rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors text-lg font-bold" 
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    value={inputAmount}
+                    onChange={e => setInputAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors text-lg font-bold"
                   />
                   {modalAction === 'buy' && (
                     <div className="text-xs text-muted-foreground mt-1 text-right">Kullanılabilir Bakiye: {currencySymbol}{displayBalance.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 2 })}</div>
                   )}
                   {modalAction === 'sell' && (
                     <div className="text-xs text-muted-foreground mt-1 text-right">
-                      Sahip olduğunuz: {portfolio.find(p => p.coinId === selectedAsset.id)?.amount.toFixed(6) || 0} {selectedAsset.symbol} 
+                      Sahip olduğunuz: {portfolio.find(p => p.coinId === selectedAsset.id)?.amount.toFixed(6) || 0} {selectedAsset.symbol}
                     </div>
                   )}
                 </div>
@@ -552,7 +551,7 @@ export default function InvestmentsTab({
       {/* AI Analyzer Modal */}
       <AnimatePresence>
         {assetToAnalyze && (
-          <AIAnalyzerModal 
+          <AIAnalyzerModal
             asset={{
               id: assetToAnalyze.id,
               name: assetToAnalyze.name,
@@ -563,7 +562,7 @@ export default function InvestmentsTab({
               sparkline: sparklines[assetToAnalyze.id] || []
             }}
             usdRate={usdRate}
-            onClose={() => setAssetToAnalyze(null)} 
+            onClose={() => setAssetToAnalyze(null)}
           />
         )}
       </AnimatePresence>
