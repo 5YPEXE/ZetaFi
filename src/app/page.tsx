@@ -152,6 +152,19 @@ export default function Home() {
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
+  const getHeaderContent = () => {
+    switch(activeTab) {
+      case 'dashboard': return { title: "Hoş Geldin, Umut 👋", desc: "İşte bu ayki finansal özetin." };
+      case 'planning': return { title: "Finansal Planlama 🎯", desc: "Hedeflerini belirle ve borçlarını stratejik olarak yönet." };
+      case 'investments': return { title: "Piyasalar & Portföyüm 📈", desc: "Yatırımlarını takip et ve yeni fırsatları keşfet." };
+      case 'transactions': return { title: "İşlem Geçmişi 💸", desc: "Tüm gelir, gider ve bütçe hareketlerin." };
+      case 'articles': return { title: "Okuma Merkezi 📚", desc: "Finansal zekanı geliştirecek makaleler ve rehberler." };
+      default: return { title: "FinQuest", desc: "Finansal Asistanın" };
+    }
+  };
+
+  const headerContent = getHeaderContent();
+
   if (isAuthChecking) return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
   return (
@@ -208,10 +221,15 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto pb-24 md:pb-6 p-6 lg:p-10 relative">
         <header className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Hoş Geldin, Umut 👋</h1>
-            <p className="text-muted-foreground mt-1">İşte bu ayki finansal özetin.</p>
-          </div>
+          <motion.div 
+            key={activeTab} 
+            initial={{ opacity: 0, x: -20 }} 
+            animate={{ opacity: 1, x: 0 }} 
+            transition={{ duration: 0.3 }}
+          >
+            <h1 className="text-3xl font-bold">{headerContent.title}</h1>
+            <p className="text-muted-foreground mt-1">{headerContent.desc}</p>
+          </motion.div>
           <div className="flex items-center gap-4">
             <button onClick={toggleTheme} className="md:hidden p-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground transition-colors">
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
