@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Wallet, PieChart as PieChartIcon, TrendingUp, ArrowUpRight, ArrowDownRight, Bot, X, CheckCircle, Target, Activity, Sun, Moon, ChevronRight, Award, Loader2 } from "lucide-react";
+import { Wallet, PieChart as PieChartIcon, TrendingUp, ArrowUpRight, ArrowDownRight, Bot, X, CheckCircle, Target, Activity, Sun, Moon, ChevronRight, Award, Loader2, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useTheme } from "next-themes";
@@ -11,6 +11,7 @@ import { useAIEngine, LessonContext, generateMonthlyReport } from "../hooks/useA
 import TransactionsTab from "../components/TransactionsTab";
 import InvestmentsTab from "../components/InvestmentsTab";
 import PlanningTab from "../components/PlanningTab";
+import ArticlesTab from "../components/ArticlesTab";
 import AuthModal from "../components/AuthModal";
 import { supabase } from "../lib/supabase";
 import { User } from "@supabase/supabase-js";
@@ -175,6 +176,7 @@ export default function Home() {
           <NavItem icon={<Target className="w-5 h-5" />} label="Planlama" active={activeTab === 'planning'} onClick={() => setActiveTab('planning')} />
           <NavItem icon={<TrendingUp className="w-5 h-5" />} label="Yatırımlar" active={activeTab === 'investments'} onClick={() => setActiveTab('investments')} />
           <NavItem icon={<Wallet className="w-5 h-5" />} label="İşlemlerim" active={activeTab === 'transactions'} onClick={() => setActiveTab('transactions')} />
+          <NavItem icon={<BookOpen className="w-5 h-5" />} label="Makaleler" active={activeTab === 'articles'} onClick={() => setActiveTab('articles')} />
         </nav>
 
         {/* Gamification Area */}
@@ -421,6 +423,7 @@ export default function Home() {
         {activeTab === "planning" && <PlanningTab goals={goals} debts={debts} totalBalance={totalBalance} addGoal={addGoal} addFundsToGoal={addFundsToGoal} addDebt={addDebt} payDebt={payDebt} />}
         {activeTab === "transactions" && <TransactionsTab transactions={transactions} onAddTransaction={addTransaction} />}
         {activeTab === "investments" && <InvestmentsTab portfolio={portfolio} onBuyCrypto={buyCrypto} onSellCrypto={sellCrypto} totalBalance={totalBalance} />}
+        {activeTab === "articles" && <ArticlesTab />}
       </main>
 
       {/* Mobile Bottom Navigation */}
@@ -436,6 +439,10 @@ export default function Home() {
         <button onClick={() => setActiveTab('investments')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'investments' ? 'text-primary' : 'text-muted-foreground'}`}>
           <TrendingUp className="w-5 h-5" />
           <span className="text-[10px] font-bold">Yatırım</span>
+        </button>
+        <button onClick={() => setActiveTab('articles')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'articles' ? 'text-primary' : 'text-muted-foreground'}`}>
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Oku</span>
         </button>
         <button onClick={() => setActiveTab('transactions')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'transactions' ? 'text-primary' : 'text-muted-foreground'}`}>
           <Wallet className="w-5 h-5" />
