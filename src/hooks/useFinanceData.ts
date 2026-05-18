@@ -318,6 +318,6 @@ export function useFinanceData(user: User | null) {
   return {
     transactions, portfolio, goals, debts, badges, isLoaded,
     addTransaction, buyCrypto, sellCrypto, addGoal, addFundsToGoal, addDebt, payDebt,
-    totalBalance, monthlyExpense, totalDebts, finquestScore: calculateScore()
+    totalBalance, monthlyExpense, totalDebts, zetafiScore: calculateScore()
   };
 }

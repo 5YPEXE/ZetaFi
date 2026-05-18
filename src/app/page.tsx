@@ -36,7 +36,7 @@ export default function Home() {
   const { 
     transactions, portfolio, goals, debts, badges, isLoaded, 
     addTransaction, buyCrypto, sellCrypto, addGoal, addFundsToGoal, addDebt, payDebt,
-    totalBalance, monthlyExpense, totalDebts, finquestScore
+    totalBalance, monthlyExpense, totalDebts, zetafiScore
   } = useFinanceData(user);
 
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
@@ -159,7 +159,7 @@ export default function Home() {
       case 'investments': return { title: "Piyasalar & Portföyüm 📈", desc: "Yatırımlarını takip et ve yeni fırsatları keşfet." };
       case 'transactions': return { title: "İşlem Geçmişi 💸", desc: "Tüm gelir, gider ve bütçe hareketlerin." };
       case 'articles': return { title: "Okuma Merkezi 📚", desc: "Finansal zekanı geliştirecek makaleler ve rehberler." };
-      default: return { title: "FinQuest", desc: "Finansal Asistanın" };
+      default: return { title: "ZetaFi", desc: "Finansal Asistanın" };
     }
   };
 
@@ -176,8 +176,8 @@ export default function Home() {
       <aside className="w-64 border-r border-border bg-card p-6 hidden md:flex flex-col relative z-10">
         <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="FinQuest Logo" className="w-8 h-8 rounded-lg object-cover shadow-md shadow-primary/20" />
-            <span className="text-xl font-bold tracking-tight">FinQuest</span>
+            <img src="/logo.png" alt="ZetaFi Logo" className="w-8 h-8 rounded-lg object-cover shadow-md shadow-primary/20" />
+            <span className="text-xl font-bold tracking-tight">ZetaFi</span>
           </div>
           <button onClick={toggleTheme} className="p-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground transition-colors">
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -282,24 +282,24 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Middle Section: FinQuest Score & AI */}
+            {/* Middle Section: ZetaFi Score & AI */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               
-              {/* FinQuest Score */}
+              {/* ZetaFi Score */}
               <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-sm hover:shadow-md transition-colors">
-                <h2 className="text-lg font-semibold w-full text-left mb-6 absolute top-6 left-6">FinQuest Skoru</h2>
+                <h2 className="text-lg font-semibold w-full text-left mb-6 absolute top-6 left-6">ZetaFi Skoru</h2>
                 <div className="relative mt-12 mb-4">
                   <svg className="w-40 h-40 transform -rotate-90">
                     <circle cx="80" cy="80" r="70" fill="transparent" stroke="currentColor" strokeWidth="12" className="text-secondary" />
                     <circle 
                       cx="80" cy="80" r="70" fill="transparent" stroke="currentColor" strokeWidth="12" 
-                      strokeDasharray="439.8" strokeDashoffset={439.8 - (439.8 * finquestScore) / 1000} 
+                      strokeDasharray="439.8" strokeDashoffset={439.8 - (439.8 * zetafiScore) / 1000} 
                       strokeLinecap="round" 
-                      className={`transition-all duration-1000 ease-out ${finquestScore > 700 ? 'text-emerald-500' : finquestScore > 400 ? 'text-primary' : 'text-rose-500'}`} 
+                      className={`transition-all duration-1000 ease-out ${zetafiScore > 700 ? 'text-emerald-500' : zetafiScore > 400 ? 'text-primary' : 'text-rose-500'}`} 
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-4xl font-black">{finquestScore}</div>
+                    <div className="text-4xl font-black">{zetafiScore}</div>
                     <div className="text-xs text-muted-foreground">/ 1000</div>
                   </div>
                 </div>
@@ -317,7 +317,7 @@ export default function Home() {
                     <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-md shadow-primary/20">
                       <Bot className="w-6 h-6" />
                     </div>
-                    <h2 className="text-xl font-semibold text-primary">FinQuest AI</h2>
+                    <h2 className="text-xl font-semibold text-primary">ZetaFi AI</h2>
                   </div>
                   <button onClick={() => setIsReportOpen(true)} className="flex items-center gap-1 bg-primary text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg shadow-primary/20 hover:scale-105 transition-transform cursor-pointer">
                     <Activity className="w-4 h-4" /> Aylık Karnemi Çıkar
@@ -512,8 +512,8 @@ export default function Home() {
                 <AnimatePresence mode="wait">
                   {onboardingStep === 0 && (
                     <motion.div key="step1" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
-                      <img src="/logo.png" alt="FinQuest Logo" className="w-24 h-24 rounded-3xl shadow-xl shadow-primary/30 mb-8 transform rotate-12 object-cover" />
-                      <h2 className="text-3xl font-black mb-4">FinQuest&apos;e<br/>Hoş Geldin</h2>
+                      <img src="/logo.png" alt="ZetaFi Logo" className="w-24 h-24 rounded-3xl shadow-xl shadow-primary/30 mb-8 transform rotate-12 object-cover" />
+                      <h2 className="text-3xl font-black mb-4">ZetaFi&apos;e<br/>Hoş Geldin</h2>
                       <p className="text-muted-foreground">Yeni nesil finansal asistanınla tanış. Cüzdanını sadece takip etme, onu büyütmeyi öğren.</p>
                     </motion.div>
                   )}

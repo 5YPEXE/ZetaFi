@@ -44,11 +44,11 @@ export default function AuthModal({ onSuccess }: { onSuccess: () => void }) {
       >
         <div className="p-8">
           <div className="flex justify-center mb-6">
-            <img src="/logo.png" alt="FinQuest Logo" className="w-20 h-20 rounded-2xl shadow-lg object-cover" />
+            <img src="/logo.png" alt="ZetaFi Logo" className="w-20 h-20 rounded-2xl shadow-lg object-cover" />
           </div>
           
           <h2 className="text-2xl font-bold text-center mb-2">
-            {isLogin ? "Tekrar Hoş Geldin" : "FinQuest'e Katıl"}
+            {isLogin ? "Tekrar Hoş Geldin" : "ZetaFi'e Katıl"}
           </h2>
           <p className="text-center text-muted-foreground text-sm mb-8">
             {isLogin ? "Kaldığın yerden finansal zekanı geliştirmeye devam et." : "Finansal özgürlüğe giden yolculuğunu bugün başlat."}

@@ -397,7 +397,7 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
               <Bot className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-bold flex items-center gap-2">FinQuest AI Analisti <span className="px-2 py-0.5 bg-primary/20 text-primary text-[10px] rounded-full uppercase tracking-wider font-bold">v3.1</span></h2>
+              <h2 className="text-xl font-bold flex items-center gap-2">ZetaFi AI Analisti <span className="px-2 py-0.5 bg-primary/20 text-primary text-[10px] rounded-full uppercase tracking-wider font-bold">v3.1</span></h2>
               <p className="text-sm text-muted-foreground">{asset.name} ({asset.symbol}) · Kurumsal Düzey Analiz Raporu</p>
             </div>
           </div>

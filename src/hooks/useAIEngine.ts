@@ -213,7 +213,7 @@ export function generateMonthlyReport(
     report += `\n💳 Üzerindeki toplam borç yükü ${totalDebts.toLocaleString('tr-TR')} ₺. Öncelikle yüksek faizli kredi kartı borçlarını eritmeye odaklan.\n`;
   }
 
-  report += "\n🚀 FinQuest Tavsiyesi: 50/30/20 bütçe kuralını hatırla ve maaşının en az %20'sini her ay düzenli yatırıma (kumbara veya varlık) ayırmayı hedefle!";
+  report += "\n🚀 ZetaFi Tavsiyesi: 50/30/20 bütçe kuralını hatırla ve maaşının en az %20'sini her ay düzenli yatırıma (kumbara veya varlık) ayırmayı hedefle!";
   
   return report;
 }

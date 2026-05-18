@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
  
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'FinQuest - Yapay Zeka Finans Koçun',
-    short_name: 'FinQuest',
+    name: 'ZetaFi - Yapay Zeka Finans Koçun',
+    short_name: 'ZetaFi',
     description: 'Harcamalarını analiz et, finansal okuryazarlığını artır.',
     start_url: '/',
     display: 'standalone',
