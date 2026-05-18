@@ -25,6 +25,16 @@ export default function ArticlesTab() {
           </div>
         </header>
 
+        <div className="mb-8 bg-primary/10 border border-primary/20 rounded-2xl p-6 flex items-center gap-4">
+          <Lightbulb className="w-8 h-8 text-primary flex-shrink-0" />
+          <div>
+            <h4 className="font-bold text-primary">Neden Okumalıyım?</h4>
+            <p className="text-sm text-muted-foreground mt-1">
+              Başarılı bir portföy yönetimi şansla değil, bilgiyle mümkündür. Buradaki kaynaklar sana piyasa psikolojisini, trend okumayı ve risk yönetimini öğretecektir.
+            </p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {articleCategories.map((cat, idx) => (
             <motion.div 
@@ -72,16 +82,6 @@ export default function ArticlesTab() {
               </div>
             </motion.div>
           ))}
-        </div>
-        
-        <div className="mt-8 bg-primary/10 border border-primary/20 rounded-2xl p-6 flex items-center gap-4">
-          <Lightbulb className="w-8 h-8 text-primary flex-shrink-0" />
-          <div>
-            <h4 className="font-bold text-primary">Neden Okumalıyım?</h4>
-            <p className="text-sm text-muted-foreground mt-1">
-              Başarılı bir portföy yönetimi şansla değil, bilgiyle mümkündür. Buradaki kaynaklar sana piyasa psikolojisini, trend okumayı ve risk yönetimini öğretecektir.
-            </p>
-          </div>
         </div>
       </motion.div>
 
