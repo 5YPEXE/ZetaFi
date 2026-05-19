@@ -407,66 +407,141 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-8 custom-scrollbar">
           {isAnalyzing ? (
-            <div className="flex flex-col items-center justify-center py-24 space-y-6">
-              <div className="relative w-24 h-24">
-                <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
-                <Bot className="absolute inset-0 m-auto w-8 h-8 text-primary animate-pulse" />
+            <div className="flex flex-col items-center justify-center py-20 space-y-8">
+              {/* Cinematic analysis animation */}
+              <div className="relative w-28 h-28">
+                <div className="absolute inset-0 border-2 border-primary/10 rounded-full" />
+                <div className="absolute inset-0 border-2 border-primary/30 rounded-full border-t-transparent animate-spin" style={{ animationDuration: '2s' }} />
+                <div className="absolute inset-2 border-2 border-primary/20 rounded-full border-b-transparent animate-spin" style={{ animationDuration: '1.4s', animationDirection: 'reverse' }} />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Bot className="w-8 h-8 text-primary animate-pulse" />
+                </div>
               </div>
-              <p className="text-lg font-medium text-primary animate-pulse">{loadingText}</p>
-              <div className="flex gap-2">
-                <div className="w-2 h-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 rounded-full bg-primary/80 animate-bounce" style={{ animationDelay: '300ms' }} />
+
+              {/* Step indicator */}
+              <div className="space-y-3 w-full max-w-xs">
+                {[
+                  "KAP ve Global Haberler Taranıyor",
+                  "3 Kaynaktan Haber Analizi",
+                  "Gelişmiş NLP Duygu Analizi",
+                  "RSI / SMA Hesaplama",
+                  "4 Katmanlı Skor Birleştirme"
+                ].map((step, i) => {
+                  const stepTimes = [800, 1800, 2800, 3600, 4200];
+                  const activeIdx = stepTimes.findIndex((t, ti) => {
+                    const next = stepTimes[ti + 1] ?? 9999;
+                    return loadingText.includes(step.split(' ')[0]) || loadingText === step;
+                  });
+                  const isDone = stepTimes[i] < 4200 && ["KAP","3 Kaynak","Gemini","RSI","4 Katman"].some(k => loadingText.includes(k) && ["3 Kaynak","Gemini","RSI","4 Katman"][i-1]);
+                  const isCurrent = loadingText.includes(["KAP","3 Fark","Gelişm","RSI/SMA","4 Katman"][i] ?? "");
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all ${
+                        isCurrent
+                          ? 'border-primary bg-primary/10 animate-pulse'
+                          : 'border-border bg-secondary'
+                      }`}>
+                        {isCurrent && <div className="w-2 h-2 rounded-full bg-primary" />}
+                      </div>
+                      <span className={`text-xs transition-colors ${
+                        isCurrent ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                      }`}>{step}</span>
+                    </div>
+                  );
+                })}
               </div>
+
+              <p className="text-sm font-semibold text-primary animate-pulse text-center px-4">{loadingText}</p>
             </div>
           ) : pred && (
-            <div className="space-y-8">
-              {/* Top Summary Stats */}
+            <div className="space-y-8 animate-data-stream">
+              {/* ── Top Summary Stats ── */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Sentiment / Score */}
                 <div className="bg-secondary/30 border border-border rounded-2xl p-5 flex flex-col items-center text-center">
-                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">Genel Görünüm</p>
-                  <div className="flex items-center gap-3">
-                    {pred.score >= 60 ? <TrendingUp className="w-8 h-8 text-emerald-500" /> : pred.score <= 40 ? <TrendingDown className="w-8 h-8 text-rose-500" /> : <Activity className="w-8 h-8 text-amber-400" />}
-                    <span className={`text-2xl font-black ${pred.score >= 60 ? 'text-emerald-500' : pred.score <= 40 ? 'text-rose-500' : 'text-amber-400'}`}>{pred.sentiment}</span>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-3">Genel Görünüm</p>
+                  <div className="flex items-center gap-3 mb-3">
+                    {pred.score >= 60 ? <TrendingUp className="w-7 h-7 text-emerald-500" /> : pred.score <= 40 ? <TrendingDown className="w-7 h-7 text-rose-500" /> : <Activity className="w-7 h-7 text-amber-400" />}
+                    <span className={`text-xl font-black ${pred.score >= 60 ? 'text-emerald-500' : pred.score <= 40 ? 'text-rose-500' : 'text-amber-400'}`}>{pred.sentiment}</span>
                   </div>
-                  <div className="w-full bg-secondary rounded-full h-2 mt-4 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-1000 ${pred.score >= 60 ? 'bg-emerald-500' : pred.score <= 40 ? 'bg-rose-500' : 'bg-amber-400'}`} style={{ width: `${pred.score}%` }} />
+                  {/* Confidence arc */}
+                  <div className="relative w-20 h-10 mb-3 overflow-hidden">
+                    <svg className="w-20 h-20 -mt-10 transform" viewBox="0 0 80 80">
+                      <path d="M 10 70 A 30 30 0 0 1 70 70" fill="none" stroke="currentColor" strokeWidth="6" className="text-border" strokeLinecap="round" />
+                      <path
+                        d="M 10 70 A 30 30 0 0 1 70 70"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                        strokeDasharray={`${(pred.score / 100) * 94} 94`}
+                        className={`transition-all duration-1000 ${pred.score >= 60 ? 'text-emerald-500' : pred.score <= 40 ? 'text-rose-500' : 'text-amber-400'}`}
+                      />
+                    </svg>
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-xl font-black tabular-nums leading-none">{pred.score}</div>
                   </div>
-                  <p className="text-xs font-bold mt-2">Güven Skoru: {pred.score}/100</p>
+                  <p className="text-[10px] text-muted-foreground">/ 100 Güven Skoru</p>
                 </div>
 
-                <div className="bg-secondary/30 border border-border rounded-2xl p-5 flex flex-col justify-center gap-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground font-medium">Model Güveni</span>
-                    <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">{pred.report.match(/Güven: ([^|]+)/)?.[1]?.trim() || 'Orta'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground font-medium">Piyasa Volatilitesi</span>
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold">{pred.report.match(/Volatilite: ([^|$\n]+)/)?.[1]?.trim() || 'Düşük'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground font-medium">Momentum</span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold">{pred.details.rsi}</span>
-                  </div>
+                {/* Model quality */}
+                <div className="bg-secondary/30 border border-border rounded-2xl p-5 flex flex-col justify-center gap-3.5">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Model Kalitesi</p>
+                  {[
+                    { label: 'Model Güveni', value: pred.report.match(/Güven: ([^|\n]+)/)?.[1]?.trim() ?? 'Orta', color: 'bg-primary/10 text-primary' },
+                    { label: 'Volatilite', value: pred.report.match(/Volatilite: ([^|$\n]+)/)?.[1]?.trim() ?? 'Düşük', color: 'bg-amber-500/10 text-amber-500' },
+                    { label: 'Momentum', value: pred.details.rsi, color: pred.details.rsi.includes('Alım') ? 'bg-emerald-500/10 text-emerald-500' : pred.details.rsi.includes('Satım') ? 'bg-rose-500/10 text-rose-500' : 'bg-secondary text-muted-foreground' },
+                  ].map(row => (
+                    <div key={row.label} className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">{row.label}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.color}`}>{row.value}</span>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="bg-secondary/30 border border-border rounded-2xl p-5 flex flex-col justify-center gap-2">
-                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Katman Katkıları</p>
-                   <div className="space-y-1.5">
-                      {[
-                        { l: 'Haber', v: pred.details.newsScore },
-                        { l: 'Trend', v: pred.details.trendScore },
-                        { l: 'Zaman Serisi', v: pred.details.forecastScore }
-                      ].map(l => (
-                        <div key={l.l} className="flex items-center gap-2">
-                          <span className="text-[10px] w-16 text-muted-foreground">{l.l}</span>
-                          <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
-                            <div className={`h-full ${l.v >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${Math.abs(l.v)}%` }} />
-                          </div>
+                {/* Signed layer contributions */}
+                <div className="bg-secondary/30 border border-border rounded-2xl p-5">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-3">Katman Katkıları</p>
+                  <div className="space-y-2.5">
+                    {[
+                      { l: 'Haber Duygu', v: pred.details.newsScore },
+                      { l: 'Teknik Trend', v: pred.details.trendScore },
+                      { l: 'Zaman Serisi', v: pred.details.forecastScore },
+                    ].map(row => (
+                      <div key={row.l}>
+                        <div className="flex justify-between text-[10px] mb-1">
+                          <span className="text-muted-foreground">{row.l}</span>
+                          <span className={`font-bold tabular-nums ${row.v >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {row.v >= 0 ? '+' : ''}{row.v}
+                          </span>
                         </div>
-                      ))}
-                   </div>
+                        <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden relative">
+                          {/* Midpoint line */}
+                          <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border/80" />
+                          {row.v >= 0 ? (
+                            <div
+                              className="absolute left-1/2 h-full bg-emerald-500 rounded-r-full transition-all duration-700"
+                              style={{ width: `${Math.abs(row.v) / 2}%` }}
+                            />
+                          ) : (
+                            <div
+                              className="absolute right-1/2 h-full bg-rose-500 rounded-l-full transition-all duration-700"
+                              style={{ width: `${Math.abs(row.v) / 2}%` }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* RSI numeric */}
+                  <div className="mt-3.5 pt-3 border-t border-border/50 flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">RSI (14)</span>
+                    <span className={`text-xs font-black tabular-nums ${
+                      pred.details.rsi === 'Aşırı Alım' ? 'text-rose-500'
+                      : pred.details.rsi === 'Güçlü Alım' ? 'text-emerald-500'
+                      : pred.details.rsi === 'Aşırı Satım' ? 'text-blue-500'
+                      : 'text-muted-foreground'
+                    }`}>{pred.details.rsi}</span>
+                  </div>
                 </div>
               </div>
 

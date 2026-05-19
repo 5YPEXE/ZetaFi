@@ -133,7 +133,15 @@ export default function Home() {
     }
   };
 
-  if (!isLoaded || !mounted) return <div className="flex items-center justify-center h-screen bg-background text-foreground">Yükleniyor...</div>;
+  if (!isLoaded || !mounted) return (
+    <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground gap-4">
+      <div className="relative w-16 h-16">
+        <div className="absolute inset-0 border-2 border-primary/20 rounded-full" />
+        <div className="absolute inset-0 border-2 border-primary rounded-full border-t-transparent animate-spin" />
+      </div>
+      <span className="text-sm text-muted-foreground font-medium">ZetaFi yükleniyor...</span>
+    </div>
+  );
 
   const portfolioTotal = portfolio.reduce((acc, p) => acc + (p.amount * p.averageBuyPrice), 0);
   const goalsTotal = goals.reduce((acc, g) => acc + g.currentAmount, 0);
@@ -165,7 +173,16 @@ export default function Home() {
 
   const headerContent = getHeaderContent();
 
-  if (isAuthChecking) return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  if (isAuthChecking) return (
+    <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground gap-3">
+      <div className="relative w-14 h-14">
+        <div className="absolute inset-0 border-2 border-primary/20 rounded-full" />
+        <div className="absolute inset-0 border-2 border-primary rounded-full border-t-transparent animate-spin" />
+        <Loader2 className="absolute inset-0 m-auto w-6 h-6 text-primary/50" />
+      </div>
+      <span className="text-xs text-muted-foreground">Oturum doğrulanıyor...</span>
+    </div>
+  );
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-300">
@@ -230,20 +247,20 @@ export default function Home() {
             <h1 className="text-3xl font-bold">{headerContent.title}</h1>
             <p className="text-muted-foreground mt-1">{headerContent.desc}</p>
           </motion.div>
-          <div className="flex items-center gap-4">
-            <button onClick={toggleTheme} className="md:hidden p-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <div className="w-10 h-10 rounded-full bg-secondary border border-border flex items-center justify-center font-semibold cursor-pointer hover:bg-border transition-colors">
-              U
+            <div className="flex items-center gap-4">
+              <button onClick={toggleTheme} className="md:hidden p-2 rounded-xl bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+              <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-sm text-primary cursor-pointer hover:bg-primary/20 transition-colors uppercase">
+                {user?.email?.[0] ?? user?.user_metadata?.full_name?.[0] ?? 'U'}
+              </div>
+              <button 
+                onClick={() => supabase.auth.signOut()} 
+                className="text-xs font-bold text-destructive hover:underline hidden md:block"
+              >
+                Çıkış Yap
+              </button>
             </div>
-            <button 
-              onClick={() => supabase.auth.signOut()} 
-              className="text-xs font-bold text-destructive hover:underline hidden md:block"
-            >
-              Çıkış Yap
-            </button>
-          </div>
         </header>
 
         {activeTab === "dashboard" && (
@@ -299,7 +316,7 @@ export default function Home() {
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-4xl font-black">{zetafiScore}</div>
+                  <div className="text-4xl font-black tabular-nums">{zetafiScore}</div>
                     <div className="text-xs text-muted-foreground">/ 1000</div>
                   </div>
                 </div>
@@ -486,11 +503,41 @@ export default function Home() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-6 md:p-8">
-                <div className="whitespace-pre-wrap text-muted-foreground leading-relaxed font-medium">
-                  {generateMonthlyReport(transactions, portfolio, totalBalance, totalDebts)}
-                </div>
-                <button onClick={() => setIsReportOpen(false)} className="w-full mt-8 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all active:scale-[0.98] cursor-pointer">
+              <div className="p-5 md:p-7 overflow-y-auto max-h-[65vh] custom-scrollbar">
+                {(() => {
+                  const text = generateMonthlyReport(transactions, portfolio, totalBalance, totalDebts);
+                  const lines = text.split('\n').filter(l => l.trim());
+                  return (
+                    <div className="space-y-3">
+                      {lines.map((line, i) => {
+                        if (line.startsWith('🎯')) return <h3 key={i} className="text-base font-bold text-foreground mb-2">{line}</h3>;
+                        if (line.startsWith('⚠️')) return <div key={i} className="flex gap-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                          <span className="text-lg leading-none flex-shrink-0">⚠️</span>
+                          <p className="text-sm text-amber-600 dark:text-amber-400 leading-relaxed">{line.replace('⚠️', '').trim()}</p>
+                        </div>;
+                        if (line.startsWith('✅')) return <div key={i} className="flex gap-3 p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                          <span className="text-lg leading-none flex-shrink-0">✅</span>
+                          <p className="text-sm text-emerald-600 dark:text-emerald-400 leading-relaxed">{line.replace('✅', '').trim()}</p>
+                        </div>;
+                        if (line.startsWith('📊') || line.startsWith('📈') || line.startsWith('📉')) return <div key={i} className="flex gap-3 p-3.5 bg-secondary/60 border border-border rounded-xl">
+                          <span className="text-lg leading-none flex-shrink-0">{line[0]}</span>
+                          <p className="text-sm text-foreground/80 leading-relaxed">{line.slice(2).trim()}</p>
+                        </div>;
+                        if (line.startsWith('💳')) return <div key={i} className="flex gap-3 p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                          <span className="text-lg leading-none flex-shrink-0">💳</span>
+                          <p className="text-sm text-rose-600 dark:text-rose-400 leading-relaxed">{line.replace('💳', '').trim()}</p>
+                        </div>;
+                        if (line.startsWith('🚀')) return <div key={i} className="flex gap-3 p-3.5 bg-primary/10 border border-primary/20 rounded-xl">
+                          <span className="text-lg leading-none flex-shrink-0">🚀</span>
+                          <p className="text-sm text-primary leading-relaxed font-medium">{line.replace('🚀', '').trim()}</p>
+                        </div>;
+                        if (line.startsWith('💡')) return <p key={i} className="text-xs text-muted-foreground italic pl-1">{line}</p>;
+                        return <p key={i} className="text-sm text-muted-foreground leading-relaxed">{line}</p>;
+                      })}
+                    </div>
+                  );
+                })()}
+                <button onClick={() => setIsReportOpen(false)} className="w-full mt-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all active:scale-[0.98] cursor-pointer">
                   Raporu Kapat
                 </button>
               </div>
