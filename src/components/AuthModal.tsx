@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Loader2, ArrowRight, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
-export default function AuthModal({ onSuccess }: { onSuccess: () => void }) {
-  const [isLogin, setIsLogin] = useState(true);
+export default function AuthModal({ onSuccess, initialMode = 'login' }: { onSuccess: () => void; initialMode?: 'login' | 'signup' }) {
+  const [isLogin, setIsLogin] = useState(initialMode === 'login');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);

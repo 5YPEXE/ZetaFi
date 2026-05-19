@@ -34,6 +34,7 @@ export default function Home() {
   
   const [user, setUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [isFirstVisit, setIsFirstVisit] = useState(false);
 
   // Global Finance State
   const { 
@@ -50,12 +51,20 @@ export default function Home() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-    
-      // load readArticlesCount from localStorage
-      try {
-        const stored = localStorage.getItem("zetafi_read_articles");
-        if (stored) setReadArticlesCount(JSON.parse(stored).length);
-      } catch { /* ignore */ }
+
+    // Detect first-time visitor
+    const hasVisited = localStorage.getItem('zetafi_visited');
+    if (!hasVisited) {
+      setIsFirstVisit(true);
+      localStorage.setItem('zetafi_visited', '1');
+    }
+
+    // load readArticlesCount from localStorage
+    try {
+      const stored = localStorage.getItem("zetafi_read_articles");
+      if (stored) setReadArticlesCount(JSON.parse(stored).length);
+    } catch { /* ignore */ }
+
 
       // Check Auth and merge with local storage
       supabase.auth.getSession().then(({ data: { session } }) => {
@@ -234,7 +243,7 @@ export default function Home() {
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-300">
       
-      {!user && <AuthModal onSuccess={() => {}} />}
+      {!user && <AuthModal onSuccess={() => {}} initialMode={isFirstVisit ? 'signup' : 'login'} />}
       
       {/* Sidebar Navigation (Desktop) */}
       <aside className="w-64 border-r border-border bg-card p-6 hidden md:flex flex-col relative z-10">
