@@ -23,18 +23,27 @@ async function fetchTradingView(market: string, body: object) {
 // Emtia: Altın/Gümüş -> cfd market, Petrol/Platin/Paladyum/Bakır -> futures market
 const COMMODITY_CFD: Record<string, string> = { 'xau': 'TVC:GOLD', 'xag': 'TVC:SILVER' };
 const COMMODITY_FUTURES: Record<string, string> = { 'brent': 'NYMEX:BZ1!', 'xpt': 'NYMEX:PL1!', 'xpd': 'NYMEX:PA1!', 'cop': 'COMEX:HG1!' };
-const CRYPTO_SYMBOLS = [
-  'BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','AVAXUSDT','DOTUSDT','TRXUSDT',
-  'LINKUSDT','MATICUSDT','SHIBUSDT','LTCUSDT','UNIUSDT','ATOMUSDT','XLMUSDT','NEARUSDT','APTUSDT','SUIUSDT',
-  'AAVEUSDT','ICPUSDT','FILUSDT','ARBUSDT','OPUSDT','INJUSDT','RENDERUSDT','FETUSDT','PEPEUSDT','WIFUSDT'
+const COINGECKO_IDS = [
+  'bitcoin','ethereum','solana','binancecoin','ripple','cardano','dogecoin','avalanche-2','polkadot','tron',
+  'chainlink','matic-network','shiba-inu','litecoin','uniswap','cosmos','stellar','near','aptos','sui',
+  'aave','internet-computer','filecoin','arbitrum','optimism','injective-protocol','render-token','fetch-ai','pepe','dogwifcoin'
 ];
+
+const CG_SYMBOL_MAP: Record<string, string> = {
+  'bitcoin':'BTC','ethereum':'ETH','solana':'SOL','binancecoin':'BNB','ripple':'XRP',
+  'cardano':'ADA','dogecoin':'DOGE','avalanche-2':'AVAX','polkadot':'DOT','tron':'TRX',
+  'chainlink':'LINK','matic-network':'MATIC','shiba-inu':'SHIB','litecoin':'LTC','uniswap':'UNI',
+  'cosmos':'ATOM','stellar':'XLM','near':'NEAR','aptos':'APT','sui':'SUI',
+  'aave':'AAVE','internet-computer':'ICP','filecoin':'FIL','arbitrum':'ARB','optimism':'OP',
+  'injective-protocol':'INJ','render-token':'RENDER','fetch-ai':'FET','pepe':'PEPE','dogwifcoin':'WIF'
+};
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     // Tüm verileri paralel çek (5 istek aynı anda)
-    const [bistRes, fxRes, cfdRes, futuresRes, binanceRes] = await Promise.allSettled([
+    const [bistRes, fxRes, cfdRes, futuresRes, cgRes] = await Promise.allSettled([
       // BIST100: Piyasa değerine göre en büyük 100 hisse (dinamik!)
       fetchTradingView('turkey', {
         filter: [{ left: 'exchange', operation: 'equal', right: 'BIST' }],
@@ -58,8 +67,11 @@ export async function GET() {
         symbols: { tickers: Object.values(COMMODITY_FUTURES), query: { types: [] } },
         columns: ['close', 'change']
       }),
-      // Kripto: Binance (Cache kapalı - gerçek zamanlı)
-      fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(CRYPTO_SYMBOLS))}`, { cache: 'no-store' }).then(r => r.json())
+      // Kripto: CoinGecko (cloud-friendly, no IP blocking)
+      fetch(
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${COINGECKO_IDS.join(',')}&order=market_cap_desc&per_page=50&page=1&sparkline=false&price_change_percentage=24h`,
+        { cache: 'no-store', signal: AbortSignal.timeout(8000) }
+      ).then(r => r.json())
     ]);
 
     // 1. USD/TRY Kuru
@@ -109,18 +121,19 @@ export async function GET() {
       }
     }
 
-    // 4. Kripto (Binance — Zengin Veri)
+    // 4. Kripto (CoinGecko)
     const crypto: any[] = [];
-    if (binanceRes.status === 'fulfilled' && Array.isArray(binanceRes.value)) {
-      for (const c of binanceRes.value) {
+    if (cgRes.status === 'fulfilled' && Array.isArray(cgRes.value)) {
+      for (const c of cgRes.value) {
+        const symbol = CG_SYMBOL_MAP[c.id] || c.symbol.toUpperCase();
         crypto.push({
-          symbol: c.symbol.replace('USDT', ''),
-          price: parseFloat(c.lastPrice) || 0,
-          change: parseFloat(c.priceChangePercent) || 0,
-          high24h: parseFloat(c.highPrice) || 0,
-          low24h: parseFloat(c.lowPrice) || 0,
-          volume: parseFloat(c.quoteVolume) || 0,
-          trades: parseInt(c.count) || 0
+          symbol,
+          price: c.current_price || 0,
+          change: c.price_change_percentage_24h || 0,
+          high24h: c.high_24h || 0,
+          low24h: c.low_24h || 0,
+          volume: c.total_volume || 0,
+          marketCap: c.market_cap || 0
         });
       }
     }
@@ -137,7 +150,7 @@ export async function GET() {
         fx: fxRes.status === 'fulfilled' ? `ok (${usdRate})` : `FAIL: ${(fxRes as any).reason}`,
         cfd: cfdRes.status === 'fulfilled' ? 'ok' : `FAIL: ${(cfdRes as any).reason}`,
         futures: futuresRes.status === 'fulfilled' ? 'ok' : `FAIL: ${(futuresRes as any).reason}`,
-        crypto: binanceRes.status === 'fulfilled' ? `ok (${crypto.length} coin)` : `FAIL: ${(binanceRes as any).reason}`
+        crypto: cgRes.status === 'fulfilled' ? `ok (${crypto.length} coin)` : `FAIL: ${(cgRes as any).reason}`
       }
     });
 
