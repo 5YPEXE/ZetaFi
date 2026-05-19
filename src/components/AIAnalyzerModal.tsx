@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, Bot, Activity, TrendingUp, TrendingDown, Clock, Newspaper, ExternalLink, Wifi, WifiOff, BarChart3 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -555,8 +555,8 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
                   if (!title) return null;
 
                   return (
-                    <>
-                      <div key={idx} className="bg-secondary/15 border border-border/50 rounded-2xl p-6 transition-all hover:border-primary/20">
+                    <React.Fragment key={idx}>
+                      <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6 transition-all hover:border-primary/20">
                         <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
                           {title === 'Piyasa Görünümü' && <Activity className="w-4 h-4" />}
                           {title === 'Bütünleşik Analiz' && <BarChart3 className="w-4 h-4" />}
@@ -626,7 +626,7 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
                           </div>
                         </div>
                       )}
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </div>
