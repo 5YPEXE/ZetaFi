@@ -240,10 +240,13 @@ export default function Home() {
     </div>
   );
 
+  if (!user) {
+    return <AuthModal onSuccess={() => {}} initialMode={isFirstVisit ? 'signup' : 'login'} />;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-300">
-      
-      {!user && <AuthModal onSuccess={() => {}} initialMode={isFirstVisit ? 'signup' : 'login'} />}
+
       
       {/* Sidebar Navigation (Desktop) */}
       <aside className="w-64 border-r border-border bg-card p-6 hidden md:flex flex-col relative z-10">
