@@ -110,61 +110,41 @@ export default function InvestmentsTab({
   const [modalAction, setModalAction] = useState<'buy' | 'sell'>('buy');
   const [inputAmount, setInputAmount] = useState('');
 
-  // TradingView Scanner — doğrudan tarayıcıdan çek (Vercel timeout sorununu çözer)
-  // CORS sorununu aşmak için allorigins.win proxy'si kullanıyoruz
-  const fetchTradingViewClient = async (market: string, body: object) => {
-    const targetUrl = `https://scanner.tradingview.com/${market}/scan`;
-    // POST isteğini allorigins ile yapmak zor olabilir, bu yüzden doğrudan deniyoruz ama timeout'u artırıyoruz
-    // Eğer doğrudan başarısız olursa, GET tabanlı bir proxy gerekebilir.
-    // Ancak önce headers'ı temizleyip deneyelim (preflight'ı azaltmak için)
-    const res = await fetch(targetUrl, {
-      method: 'POST',
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!res.ok) throw new Error(`TV ${market}: ${res.status}`);
-    return res.json();
-  };
-
   const loadData = async (isFirstLoad: boolean = false) => {
     if (isFirstLoad) setIsLoading(true);
     let currentUsdRate = usdRate;
 
-    // === PARALEL: Tüm verileri aynı anda çek (tarayıcı + API) ===
-    const [fxRes, apiRes] = await Promise.allSettled([
-      fetchTradingViewClient('forex', {
-        symbols: { tickers: ['FX_IDC:USDTRY'], query: { types: [] } },
-        columns: ['close', 'change']
-      }),
-      fetch('/api/finance', { cache: 'no-store' }).then(r => r.json())
-    ]);
+    try {
+      const res = await fetch('/api/finance', { cache: 'no-store' });
+      if (res.ok) {
+        const apiData = await res.json();
+        
+        if (apiData.status === 'success') {
+          currentUsdRate = apiData.usd_rate || 38.5;
+          setUsdRate(currentUsdRate);
 
-    // 1. USD/TRY Kuru
-    if (fxRes.status === 'fulfilled' && fxRes.value?.data?.[0]) {
-      currentUsdRate = fxRes.value.data[0].d[0] || 38.5;
-    }
-    setUsdRate(currentUsdRate);
+          const { crypto } = apiData;
+          const newCryptos: Asset[] = BASE_CRYPTOS.map(bc => {
+            const cData = crypto.find((c: any) => c.symbol === bc.symbol);
+            const priceUsd = cData?.price || 0;
+            return {
+              id: bc.id, symbol: bc.symbol, name: bc.name,
+              priceUsd, priceTry: priceUsd * currentUsdRate,
+              change24h: cData?.change || 0, color: getRandomColor(), imageUrl: bc.image,
+              volume: cData?.volume || 0, high24h: cData?.high24h || 0, low24h: cData?.low24h || 0, trades: cData?.trades || 0
+            };
+          });
+          setCryptos(newCryptos);
 
-    // 2. Kripto (Binance — API route'dan)
-    if (apiRes.status === 'fulfilled' && apiRes.value?.status === 'success') {
-      const { crypto } = apiRes.value;
-      const newCryptos: Asset[] = BASE_CRYPTOS.map(bc => {
-        const cData = crypto.find((c: any) => c.symbol === bc.symbol);
-        const priceUsd = cData?.price || 0;
-        return {
-          id: bc.id, symbol: bc.symbol, name: bc.name,
-          priceUsd, priceTry: priceUsd * currentUsdRate,
-          change24h: cData?.change || 0, color: getRandomColor(), imageUrl: bc.image,
-          volume: cData?.volume || 0, high24h: cData?.high24h || 0, low24h: cData?.low24h || 0, trades: cData?.trades || 0
-        };
-      });
-      setCryptos(newCryptos);
-
-      if (isFirstLoad) {
-        const firstSparklines: Record<string, { value: number }[]> = {};
-        newCryptos.forEach(c => { firstSparklines[c.id] = generateMockSparkline(c.priceTry, 0.1); });
-        setSparklines(prev => ({ ...prev, ...firstSparklines }));
+          if (isFirstLoad) {
+            const firstSparklines: Record<string, { value: number }[]> = {};
+            newCryptos.forEach(c => { firstSparklines[c.id] = generateMockSparkline(c.priceTry, 0.1); });
+            setSparklines(prev => ({ ...prev, ...firstSparklines }));
+          }
+        }
       }
+    } catch (error) {
+      console.error("Finance API Error:", error);
     }
 
     // 3. BIST100 (SİMULASYON MODU - Sabitlenmiş Başlangıç Verileri)
