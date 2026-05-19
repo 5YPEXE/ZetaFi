@@ -250,12 +250,11 @@ export default function Home() {
 
         <nav className="space-y-1 flex-1">
           <NavItem icon={<PieChartIcon className="w-5 h-5" />} label="Gösterge Paneli" active={activeTab === 'dashboard'}    onClick={() => setActiveTab('dashboard')} />
-          <NavItem icon={<Target        className="w-5 h-5" />} label="Planlama"       active={activeTab === 'planning'}     onClick={() => setActiveTab('planning')} />
           <NavItem icon={<TrendingUp    className="w-5 h-5" />} label="Yatırımlar"    active={activeTab === 'investments'}  onClick={() => setActiveTab('investments')} />
           <NavItem icon={<Wallet        className="w-5 h-5" />} label="İşlemlerim"    active={activeTab === 'transactions'} onClick={() => setActiveTab('transactions')} />
           <NavItem icon={<BarChart2     className="w-5 h-5" />} label="Bütçe Analizi" active={activeTab === 'budget'}       onClick={() => setActiveTab('budget')} />
+          <NavItem icon={<Target        className="w-5 h-5" />} label="Planlama"       active={activeTab === 'planning'}     onClick={() => setActiveTab('planning')} />
           <NavItem icon={<BookOpen      className="w-5 h-5" />} label="Makaleler"     active={activeTab === 'articles'}     onClick={() => setActiveTab('articles')} />
-          <NavItem icon={<User2         className="w-5 h-5" />} label="Profilim"      active={activeTab === 'profile'}      onClick={() => setActiveTab('profile')} />
         </nav>
 
         {/* Gamification Area */}
@@ -269,49 +268,42 @@ export default function Home() {
           };
           return (
             <div className="mt-auto space-y-3">
-              {/* Badges mini */}
-              <div className="bg-secondary rounded-xl p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold">Rozetler</span>
-                  <span className="text-[10px] font-bold text-primary">{unlockedBadges.length}/{badges.length}</span>
+              {/* Clickable profile card */}
+              <button
+                onClick={() => setActiveTab('profile')}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                  activeTab === 'profile'
+                    ? 'bg-primary/10 border-primary/30 text-primary'
+                    : 'bg-secondary border-transparent hover:border-border text-foreground'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0 ${
+                  activeTab === 'profile' ? 'bg-primary text-primary-foreground' : 'bg-border'
+                }`}>
+                  {user?.email?.[0]?.toUpperCase() ?? 'U'}
                 </div>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {badges.slice(0, 8).map(b => (
-                    <div
-                      key={b.id}
-                      title={`${b.name}: ${b.desc}`}
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-sm ${
-                        b.isUnlocked ? 'bg-primary/20' : 'bg-background grayscale opacity-30'
-                      }`}
-                    >
-                      {b.icon}
-                    </div>
-                  ))}
-                  {badges.length > 8 && (
-                    <div className="w-7 h-7 rounded-full bg-background flex items-center justify-center text-[10px] font-bold text-muted-foreground">+{badges.length - 8}</div>
-                  )}
+                <div className="text-left min-w-0">
+                  <div className={`text-xs font-black truncate ${currentTitle.color}`}>{currentTitle.title}</div>
+                  <div className="text-[10px] text-muted-foreground">Lv.{userLevel} · {unlockedBadges.length}/{badges.length} Rozet</div>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground ml-auto flex-shrink-0" />
+              </button>
+
+              {/* XP bar */}
+              <div className="bg-secondary rounded-xl p-3">
+                <div className="flex justify-between text-[10px] text-muted-foreground mb-1.5">
+                  <span className="font-bold">{userExp} XP</span>
+                  {nextTitle && <span>→ {nextTitle.title} (Lv.{nextTitle.level})</span>}
+                </div>
+                <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
+                  <motion.div className="bg-primary h-full rounded-full" initial={{ width: 0 }} animate={{ width: `${userExp}%` }} transition={{ duration: 1 }} />
                 </div>
                 {nextBadge && (
-                  <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                    <span className="text-xs">{nextBadge.icon}</span>
+                  <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-2">
+                    <span>{nextBadge.icon}</span>
                     <span>Sonraki: <span className={`font-bold ${TIER_COLORS[nextBadge.tier]}`}>{nextBadge.name}</span></span>
                   </div>
                 )}
-              </div>
-
-              {/* Level + XP */}
-              <div className="bg-secondary rounded-xl p-3">
-                <div className="flex justify-between items-baseline mb-1">
-                  <span className={`text-xs font-black ${currentTitle.color}`}>{currentTitle.title}</span>
-                  <span className="text-[10px] text-muted-foreground tabular-nums">Lv.{userLevel}</span>
-                </div>
-                <div className="w-full bg-border rounded-full h-1.5 mb-1 overflow-hidden">
-                  <motion.div className="bg-primary h-full rounded-full" initial={{ width: 0 }} animate={{ width: `${userExp}%` }} transition={{ duration: 1 }} />
-                </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span>{userExp} XP</span>
-                  {nextTitle && <span>→ Lv.{nextTitle.level} {nextTitle.title}</span>}
-                </div>
               </div>
             </div>
           );
