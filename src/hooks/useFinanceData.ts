@@ -42,9 +42,10 @@ export type Badge = {
   desc: string;
   icon: string;
   isUnlocked: boolean;
+  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
 };
 
-export function useFinanceData(user: User | null) {
+export function useFinanceData(user: User | null, readArticlesCount: number = 0) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -308,16 +309,27 @@ export function useFinanceData(user: User | null) {
     return Math.min(1000, Math.max(0, Math.floor(score)));
   };
 
+  const zetafiScore = calculateScore();
+  const investmentTxCount = transactions.filter(t => t.type === 'investment').length;
+
   const badges: Badge[] = [
-    { id: 'first_blood', name: 'İlk Kan', desc: 'İlk gelirini veya giderini ekledin', icon: '🪙', isUnlocked: transactions.length > 1 },
-    { id: 'investor', name: 'Kurt Vps', desc: 'İlk yatırımını yaptın', icon: '📈', isUnlocked: transactions.some(t => t.type === 'investment') },
-    { id: 'goal_achiever', name: 'Tasarruf Şampiyonu', desc: 'Bir kumbarayı tamamen doldurdun', icon: '🎯', isUnlocked: goals.some(g => g.isCompleted) },
-    { id: 'debt_destroyer', name: 'Borç Yok Edici', desc: 'Bir borcunu sıfırladın', icon: '🛡️', isUnlocked: transactions.some(t => t.category === 'Borç Ödemesi') },
+    { id: 'first_blood',    name: 'İlk Adım',         desc: 'İlk işlemini kaydetti',                  icon: '🪙',  tier: 'bronze',   isUnlocked: transactions.length > 1 },
+    { id: 'investor',       name: 'Yatırımcı',         desc: 'İlk yatırımını yaptın',                  icon: '📈',  tier: 'bronze',   isUnlocked: portfolio.length > 0 },
+    { id: 'goal_achiever',  name: 'Hedef Avcısı',      desc: 'Bir hedefini tamamladın',                icon: '🎯',  tier: 'silver',   isUnlocked: goals.some(g => g.isCompleted) },
+    { id: 'debt_destroyer', name: 'Borç Kırıcı',       desc: 'Bir borcunu ödemeye başladın',           icon: '🛡️',  tier: 'silver',   isUnlocked: transactions.some(t => t.category === 'Borç Ödemesi') },
+    { id: 'diversified',    name: 'Diversifiye',        desc: '3 farklı varlığa yatırım yaptın',        icon: '🌐',  tier: 'silver',   isUnlocked: portfolio.length >= 3 },
+    { id: 'saver',          name: 'Tasarrufçu',         desc: '2 veya daha fazla hedef oluşturdun',     icon: '💰',  tier: 'bronze',   isUnlocked: goals.length >= 2 },
+    { id: 'debt_free',      name: 'Borçsuz',            desc: 'Hiç borcun yok ve aktif kullanıcısın',  icon: '✨',  tier: 'gold',     isUnlocked: debts.length === 0 && transactions.length > 5 },
+    { id: 'high_score',     name: 'ZetaFi Elite',       desc: 'ZetaFi skorun 750 üzerine çıktı',        icon: '🏆',  tier: 'gold',     isUnlocked: zetafiScore >= 750 },
+    { id: 'reader',         name: 'Finansal Okur',      desc: '3 makale okudun',                        icon: '📚',  tier: 'bronze',   isUnlocked: readArticlesCount >= 3 },
+    { id: 'reader_pro',     name: 'Akademisyen',        desc: '10 makale okudun',                       icon: '🎓',  tier: 'silver',   isUnlocked: readArticlesCount >= 10 },
+    { id: 'active_trader',  name: 'Aktif Trader',       desc: '5 veya daha fazla yatırım işlemi yaptın',icon: '🐋',  tier: 'gold',     isUnlocked: investmentTxCount >= 5 },
+    { id: 'consistent',     name: 'Disiplinli',         desc: '10 veya daha fazla işlem kaydın var',    icon: '🔥',  tier: 'platinum', isUnlocked: transactions.length >= 10 },
   ];
 
   return {
     transactions, portfolio, goals, debts, badges, isLoaded,
     addTransaction, buyCrypto, sellCrypto, addGoal, addFundsToGoal, addDebt, payDebt,
-    totalBalance, monthlyExpense, totalDebts, zetafiScore: calculateScore()
+    totalBalance, monthlyExpense, totalDebts, zetafiScore
   };
 }

@@ -15,7 +15,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; border: string; badge: strin
   "kripto-web3":   { bg: "bg-amber-500/10",   border: "border-amber-500/20", badge: "bg-amber-500/10 text-amber-500" },
 };
 
-export default function ArticlesTab() {
+export default function ArticlesTab({ onArticleRead }: { onArticleRead?: () => void }) {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [readArticles, setReadArticles] = useState<Set<string>>(new Set());
@@ -45,9 +45,11 @@ export default function ArticlesTab() {
 
   const markRead = (article: Article) => {
     const key = article.title;
+    const isNew = !readArticles.has(key);
     const next = new Set(readArticles).add(key);
     setReadArticles(next);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+    if (isNew && onArticleRead) onArticleRead();
     setSelectedArticle(null);
   };
 

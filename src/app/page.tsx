@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Wallet, PieChart as PieChartIcon, TrendingUp, ArrowUpRight, ArrowDownRight, Bot, X, CheckCircle, Target, Activity, Sun, Moon, ChevronRight, Award, Loader2, BookOpen } from "lucide-react";
+import { Wallet, PieChart as PieChartIcon, TrendingUp, ArrowUpRight, ArrowDownRight, Bot, X, CheckCircle, Target, Activity, Sun, Moon, ChevronRight, Award, Loader2, BookOpen, BarChart2, User2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useTheme } from "next-themes";
@@ -12,6 +12,8 @@ import TransactionsTab from "../components/TransactionsTab";
 import InvestmentsTab from "../components/InvestmentsTab";
 import PlanningTab from "../components/PlanningTab";
 import ArticlesTab from "../components/ArticlesTab";
+import BudgetTab from "../components/BudgetTab";
+import ProfileTab, { getCurrentTitle, getNextTitle } from "../components/ProfileTab";
 import AuthModal from "../components/AuthModal";
 import { supabase } from "../lib/supabase";
 import { User } from "@supabase/supabase-js";
@@ -25,6 +27,7 @@ export default function Home() {
   const [userLevel, setUserLevel] = useState(3);
   const [userExp, setUserExp] = useState(45);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [readArticlesCount, setReadArticlesCount] = useState(0);
 
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -37,7 +40,7 @@ export default function Home() {
     transactions, portfolio, goals, debts, badges, isLoaded, 
     addTransaction, buyCrypto, sellCrypto, addGoal, addFundsToGoal, addDebt, payDebt,
     totalBalance, monthlyExpense, totalDebts, zetafiScore
-  } = useFinanceData(user);
+  } = useFinanceData(user, readArticlesCount);
 
   const [completedLessonIds, setCompletedLessonIds] = useState<string[]>([]);
   
@@ -48,8 +51,14 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     
-    // Check Auth and merge with local storage
-    supabase.auth.getSession().then(({ data: { session } }) => {
+      // load readArticlesCount from localStorage
+      try {
+        const stored = localStorage.getItem("zetafi_read_articles");
+        if (stored) setReadArticlesCount(JSON.parse(stored).length);
+      } catch { /* ignore */ }
+
+      // Check Auth and merge with local storage
+      supabase.auth.getSession().then(({ data: { session } }) => {
       const activeUser = session?.user ?? null;
       setUser(activeUser);
       setIsAuthChecking(false);
@@ -93,6 +102,42 @@ export default function Home() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // ── Grant XP (articles, trades, quizzes) ──
+  const grantXP = async (amount: number) => {
+    let newExp = userExp + amount;
+    let newLevel = userLevel;
+    if (newExp >= 100) { newLevel += 1; newExp = newExp - 100 + 5; }
+    newExp = Math.min(newExp, 99);
+    setUserExp(newExp);
+    setUserLevel(newLevel);
+    localStorage.setItem("fq_level", newLevel.toString());
+    localStorage.setItem("fq_exp", newExp.toString());
+    if (user) {
+      await supabase.auth.updateUser({ data: { fq_level: newLevel, fq_exp: newExp } });
+    }
+  };
+
+  // Article read → +15 XP
+  const handleArticleRead = () => {
+    try {
+      const stored = localStorage.getItem("zetafi_read_articles");
+      const count = stored ? JSON.parse(stored).length : 0;
+      setReadArticlesCount(count);
+    } catch { /* ignore */ }
+    grantXP(15);
+  };
+
+  // Wrapped trade handlers → +10 XP each
+  const handleBuyCrypto = async (id: string, symbol: string, name: string, price: number, amount: number) => {
+    await buyCrypto(id, symbol, name, price, amount);
+    grantXP(10);
+  };
+  const handleSellCrypto = async (id: string, name: string, amountToSell: number, currentPrice: number) => {
+    const ok = await sellCrypto(id, name, amountToSell, currentPrice);
+    if (ok) grantXP(10);
+    return ok;
+  };
 
   const handleQuizComplete = async () => {
     setIsLessonOpen(false);
@@ -162,12 +207,14 @@ export default function Home() {
 
   const getHeaderContent = () => {
     switch(activeTab) {
-      case 'dashboard': return { title: "Hoş Geldin, Umut 👋", desc: "İşte bu ayki finansal özetin." };
-      case 'planning': return { title: "Finansal Planlama 🎯", desc: "Hedeflerini belirle ve borçlarını stratejik olarak yönet." };
-      case 'investments': return { title: "Piyasalar & Portföyüm 📈", desc: "Yatırımlarını takip et ve yeni fırsatları keşfet." };
-      case 'transactions': return { title: "İşlem Geçmişi 💸", desc: "Tüm gelir, gider ve bütçe hareketlerin." };
-      case 'articles': return { title: "Okuma Merkezi 📚", desc: "Finansal zekanı geliştirecek makaleler ve rehberler." };
-      default: return { title: "ZetaFi", desc: "Finansal Asistanın" };
+      case 'dashboard':    return { title: "Hoş Geldin, Umut 👋",         desc: "İşte bu ayki finansal özetin." };
+      case 'planning':     return { title: "Finansal Planlama 🎯",          desc: "Hedeflerini belirle ve borçlarını stratejik olarak yönet." };
+      case 'investments':  return { title: "Piyasalar & Portföyüm 📈",      desc: "Yatırımlarını takip et ve yeni fırsatları keşfet." };
+      case 'transactions': return { title: "İşlem Geçmişi 💸",              desc: "Tüm gelir, gider ve bütçe hareketlerin." };
+      case 'articles':     return { title: "Okuma Merkezi 📚",              desc: "Finansal zekanı geliştirecek makaleler ve rehberler." };
+      case 'budget':       return { title: "Bütçe Analizi 📊",              desc: "Harcama kategorilerini ve gelir/gider dengesini görüntüle." };
+      case 'profile':      return { title: "Profilim & Rozetler 🏆",        desc: "Seviyeni, rozetlerini ve finansal ilerleme puanını takip et." };
+      default:             return { title: "ZetaFi",                         desc: "Finansal Asistanın" };
     }
   };
 
@@ -201,38 +248,74 @@ export default function Home() {
           </button>
         </div>
 
-        <nav className="space-y-2 flex-1">
-          <NavItem icon={<PieChartIcon className="w-5 h-5" />} label="Gösterge Paneli" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <NavItem icon={<Target className="w-5 h-5" />} label="Planlama" active={activeTab === 'planning'} onClick={() => setActiveTab('planning')} />
-          <NavItem icon={<TrendingUp className="w-5 h-5" />} label="Yatırımlar" active={activeTab === 'investments'} onClick={() => setActiveTab('investments')} />
-          <NavItem icon={<Wallet className="w-5 h-5" />} label="İşlemlerim" active={activeTab === 'transactions'} onClick={() => setActiveTab('transactions')} />
-          <NavItem icon={<BookOpen className="w-5 h-5" />} label="Makaleler" active={activeTab === 'articles'} onClick={() => setActiveTab('articles')} />
+        <nav className="space-y-1 flex-1">
+          <NavItem icon={<PieChartIcon className="w-5 h-5" />} label="Gösterge Paneli" active={activeTab === 'dashboard'}    onClick={() => setActiveTab('dashboard')} />
+          <NavItem icon={<Target        className="w-5 h-5" />} label="Planlama"       active={activeTab === 'planning'}     onClick={() => setActiveTab('planning')} />
+          <NavItem icon={<TrendingUp    className="w-5 h-5" />} label="Yatırımlar"    active={activeTab === 'investments'}  onClick={() => setActiveTab('investments')} />
+          <NavItem icon={<Wallet        className="w-5 h-5" />} label="İşlemlerim"    active={activeTab === 'transactions'} onClick={() => setActiveTab('transactions')} />
+          <NavItem icon={<BarChart2     className="w-5 h-5" />} label="Bütçe Analizi" active={activeTab === 'budget'}       onClick={() => setActiveTab('budget')} />
+          <NavItem icon={<BookOpen      className="w-5 h-5" />} label="Makaleler"     active={activeTab === 'articles'}     onClick={() => setActiveTab('articles')} />
+          <NavItem icon={<User2         className="w-5 h-5" />} label="Profilim"      active={activeTab === 'profile'}      onClick={() => setActiveTab('profile')} />
         </nav>
 
         {/* Gamification Area */}
-        <div className="mt-auto space-y-4">
-          <div className="bg-secondary rounded-xl p-4">
-            <div className="flex items-center justify-between text-sm font-medium mb-2">
-              <span>Rozetler</span>
-              <span className="text-primary">{badges.filter(b=>b.isUnlocked).length}/{badges.length}</span>
-            </div>
-            <div className="flex gap-2">
-              {badges.map(b => (
-                <div key={b.id} title={b.desc} className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${b.isUnlocked ? 'bg-primary/20 cursor-help' : 'bg-background grayscale opacity-40'}`}>
-                  {b.icon}
+        {(() => {
+          const currentTitle = getCurrentTitle(userLevel);
+          const nextTitle    = getNextTitle(userLevel);
+          const unlockedBadges = badges.filter(b => b.isUnlocked);
+          const nextBadge = badges.find(b => !b.isUnlocked);
+          const TIER_COLORS: Record<string, string> = {
+            bronze: 'text-amber-600', silver: 'text-slate-400', gold: 'text-yellow-400', platinum: 'text-primary'
+          };
+          return (
+            <div className="mt-auto space-y-3">
+              {/* Badges mini */}
+              <div className="bg-secondary rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold">Rozetler</span>
+                  <span className="text-[10px] font-bold text-primary">{unlockedBadges.length}/{badges.length}</span>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {badges.slice(0, 8).map(b => (
+                    <div
+                      key={b.id}
+                      title={`${b.name}: ${b.desc}`}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-sm ${
+                        b.isUnlocked ? 'bg-primary/20' : 'bg-background grayscale opacity-30'
+                      }`}
+                    >
+                      {b.icon}
+                    </div>
+                  ))}
+                  {badges.length > 8 && (
+                    <div className="w-7 h-7 rounded-full bg-background flex items-center justify-center text-[10px] font-bold text-muted-foreground">+{badges.length - 8}</div>
+                  )}
+                </div>
+                {nextBadge && (
+                  <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <span className="text-xs">{nextBadge.icon}</span>
+                    <span>Sonraki: <span className={`font-bold ${TIER_COLORS[nextBadge.tier]}`}>{nextBadge.name}</span></span>
+                  </div>
+                )}
+              </div>
 
-          <div className="p-4 bg-secondary rounded-xl">
-            <div className="text-sm font-medium mb-1">Finansal Zeka</div>
-            <div className="w-full bg-border rounded-full h-2 mb-2 overflow-hidden">
-              <motion.div className="bg-primary h-full rounded-full" initial={{ width: 0 }} animate={{ width: `${userExp}%` }} transition={{ duration: 1 }} />
+              {/* Level + XP */}
+              <div className="bg-secondary rounded-xl p-3">
+                <div className="flex justify-between items-baseline mb-1">
+                  <span className={`text-xs font-black ${currentTitle.color}`}>{currentTitle.title}</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums">Lv.{userLevel}</span>
+                </div>
+                <div className="w-full bg-border rounded-full h-1.5 mb-1 overflow-hidden">
+                  <motion.div className="bg-primary h-full rounded-full" initial={{ width: 0 }} animate={{ width: `${userExp}%` }} transition={{ duration: 1 }} />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>{userExp} XP</span>
+                  {nextTitle && <span>→ Lv.{nextTitle.level} {nextTitle.title}</span>}
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-muted-foreground text-right">Seviye {userLevel} Çırak</div>
-          </div>
-        </div>
+          );
+        })()}
       </aside>
 
       {/* Main Content Area */}
@@ -455,34 +538,22 @@ export default function Home() {
           </motion.div>
         )}
 
-        {activeTab === "planning" && <PlanningTab goals={goals} debts={debts} totalBalance={totalBalance} addGoal={addGoal} addFundsToGoal={addFundsToGoal} addDebt={addDebt} payDebt={payDebt} />}
-        {activeTab === "transactions" && <TransactionsTab transactions={transactions} onAddTransaction={addTransaction} />}
-        {activeTab === "investments" && <InvestmentsTab portfolio={portfolio} onBuyCrypto={buyCrypto} onSellCrypto={sellCrypto} totalBalance={totalBalance} />}
-        {activeTab === "articles" && <ArticlesTab />}
+        {activeTab === "planning"     && <PlanningTab goals={goals} debts={debts} totalBalance={totalBalance} addGoal={addGoal} addFundsToGoal={addFundsToGoal} addDebt={addDebt} payDebt={payDebt} />}
+        {activeTab === "transactions"  && <TransactionsTab transactions={transactions} onAddTransaction={addTransaction} />}
+        {activeTab === "investments"   && <InvestmentsTab portfolio={portfolio} onBuyCrypto={handleBuyCrypto} onSellCrypto={handleSellCrypto} totalBalance={totalBalance} />}
+        {activeTab === "articles"      && <ArticlesTab onArticleRead={handleArticleRead} />}
+        {activeTab === "budget"        && <BudgetTab transactions={transactions} />}
+        {activeTab === "profile"       && <ProfileTab badges={badges} userLevel={userLevel} userExp={userExp} zetafiScore={zetafiScore} readArticlesCount={readArticlesCount} />}
       </main>
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border p-2 px-4 flex justify-between items-center z-40 pb-safe shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] transition-colors">
-        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'dashboard' ? 'text-primary' : 'text-muted-foreground'}`}>
-          <PieChartIcon className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Özet</span>
-        </button>
-        <button onClick={() => setActiveTab('planning')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'planning' ? 'text-primary' : 'text-muted-foreground'}`}>
-          <Target className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Plan</span>
-        </button>
-        <button onClick={() => setActiveTab('investments')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'investments' ? 'text-primary' : 'text-muted-foreground'}`}>
-          <TrendingUp className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Yatırım</span>
-        </button>
-        <button onClick={() => setActiveTab('articles')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'articles' ? 'text-primary' : 'text-muted-foreground'}`}>
-          <BookOpen className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Oku</span>
-        </button>
-        <button onClick={() => setActiveTab('transactions')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'transactions' ? 'text-primary' : 'text-muted-foreground'}`}>
-          <Wallet className="w-5 h-5" />
-          <span className="text-[10px] font-bold">İşlem</span>
-        </button>
+        <button onClick={() => setActiveTab('dashboard')}    className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'dashboard'    ? 'text-primary' : 'text-muted-foreground'}`}><PieChartIcon className="w-5 h-5" /><span className="text-[10px] font-bold">Özet</span></button>
+        <button onClick={() => setActiveTab('planning')}     className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'planning'     ? 'text-primary' : 'text-muted-foreground'}`}><Target       className="w-5 h-5" /><span className="text-[10px] font-bold">Plan</span></button>
+        <button onClick={() => setActiveTab('investments')}  className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'investments'  ? 'text-primary' : 'text-muted-foreground'}`}><TrendingUp   className="w-5 h-5" /><span className="text-[10px] font-bold">Piyasa</span></button>
+        <button onClick={() => setActiveTab('budget')}       className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'budget'       ? 'text-primary' : 'text-muted-foreground'}`}><BarChart2    className="w-5 h-5" /><span className="text-[10px] font-bold">Bütçe</span></button>
+        <button onClick={() => setActiveTab('articles')}     className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'articles'     ? 'text-primary' : 'text-muted-foreground'}`}><BookOpen     className="w-5 h-5" /><span className="text-[10px] font-bold">Oku</span></button>
+        <button onClick={() => setActiveTab('profile')}      className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'profile'      ? 'text-primary' : 'text-muted-foreground'}`}><User2        className="w-5 h-5" /><span className="text-[10px] font-bold">Profil</span></button>
       </nav>
 
       {/* AI Lesson Modal */}
