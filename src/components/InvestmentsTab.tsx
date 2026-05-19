@@ -319,6 +319,12 @@ export default function InvestmentsTab({
     setInputAmount('');
   };
 
+  // Derived portfolio stats
+  const totalCost = portfolio.reduce((acc, item) => acc + (item.amount * item.averageBuyPrice), 0);
+  const totalCostDisplay = currency === 'try' ? totalCost : totalCost / usdRate;
+  const totalPnL = totalPortfolioValue - totalCostDisplay;
+  const totalPnLPct = totalCostDisplay > 0 ? (totalPnL / totalCostDisplay) * 100 : 0;
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="pb-10">
       <div className="flex justify-between items-center mb-6">
@@ -334,47 +340,124 @@ export default function InvestmentsTab({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-card border border-border rounded-2xl p-6 flex flex-col justify-between col-span-1 md:col-span-2 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-6 opacity-5">
-            <DollarSign className="w-48 h-48" />
-          </div>
+      {/* ── Portfolio Summary Header ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        {/* Total value */}
+        <div className="sm:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-6 opacity-5"><DollarSign className="w-40 h-40" /></div>
           <div className="relative z-10">
-            <div className="text-sm text-muted-foreground mb-2">Toplam Portföy Değeri</div>
-            <div className="text-4xl font-bold mb-2">{currencySymbol}{totalPortfolioValue.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div className="text-sm text-muted-foreground">Kullanılabilir Nakit (Ana Bakiye): {currencySymbol}{displayBalance.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Toplam Portföy Değeri</div>
+            <div className="text-4xl font-bold tabular-nums mb-3">
+              {currencySymbol}{totalPortfolioValue.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="text-xs text-muted-foreground">
+                Toplam Maliyet: <span className="font-bold text-foreground">{currencySymbol}{totalCostDisplay.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${
+                totalPnL >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
+              }`}>
+                {totalPnL >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                {totalPnL >= 0 ? '+' : ''}{currencySymbol}{Math.abs(totalPnL).toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({totalPnLPct >= 0 ? '+' : ''}{totalPnLPct.toFixed(2)}%)
+              </div>
+            </div>
           </div>
+        </div>
+        {/* Available cash */}
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+          <div className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Kullanılabilir Nakit</div>
+          <div className="text-2xl font-bold tabular-nums text-primary">
+            {currencySymbol}{displayBalance.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="text-xs text-muted-foreground mt-2">Ana bakiye — yatırıma hazır</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Varlıklarım (Sol Kolon) */}
         <div className="xl:col-span-1">
-          <h3 className="text-lg font-semibold mb-4">Sahip Olduklarım</h3>
-          <div className="bg-card border border-border rounded-2xl overflow-hidden max-h-[600px] overflow-y-auto">
+          <h3 className="text-lg font-semibold mb-4">Sahip Olduklarım
+            <span className="ml-2 text-xs font-normal text-muted-foreground">{portfolio.length} varlık</span>
+          </h3>
+          <div className="bg-card border border-border rounded-2xl overflow-hidden max-h-[600px] overflow-y-auto custom-scrollbar">
             {portfolio.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">Henüz bir yatırımınız bulunmuyor. Piyasalardan varlık satın alın.</div>
+              <div className="p-8 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-3">
+                  <DollarSign className="w-7 h-7 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground">Henüz yatırım yok</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Piyasalardan varlık satın al</p>
+              </div>
             ) : (
               <div className="divide-y divide-border">
                 {portfolio.map(item => {
                   const currentPrice = getAssetPrice(item.coinId, currency);
                   const totalValue = item.amount * currentPrice;
+                  const avgBuyDisplay = currency === 'try' ? item.averageBuyPrice : item.averageBuyPrice / usdRate;
+                  const costBasis = item.amount * avgBuyDisplay;
+                  const pnlAbs = totalValue - costBasis;
+                  const pnlPct = costBasis > 0 ? (pnlAbs / costBasis) * 100 : 0;
+                  const isGain = pnlPct >= 0;
+                  // Find the asset for analyze/sell actions
+                  const assetObj = [...cryptos, ...stocks, ...commodities].find(a => a.id === item.coinId);
 
-                  const currentPriceTry = getAssetPrice(item.coinId, 'try');
-                  const profitLossPercent = currentPriceTry > 0 ? ((currentPriceTry - item.averageBuyPrice) / item.averageBuyPrice) * 100 : 0;
+                  // Format amount nicely
+                  const fmtAmount = item.amount >= 1 
+                    ? item.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })
+                    : item.amount.toLocaleString(undefined, { maximumSignificantDigits: 4 });
 
                   return (
-                    <div key={item.coinId} className="p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
-                      <div>
-                        <div className="font-bold">{item.symbol}</div>
-                        <div className="text-xs text-muted-foreground">{item.amount.toFixed(6)} Adet</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold">{currencySymbol}{totalValue.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                        <div className={`text-xs font-bold ${profitLossPercent >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {profitLossPercent >= 0 ? '+' : ''}{profitLossPercent.toFixed(2)}%
+                    <div key={item.coinId} className="p-4 hover:bg-secondary/30 transition-colors group">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2.5">
+                          {assetObj?.imageUrl ? (
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-white flex-shrink-0">
+                              <img src={assetObj.imageUrl} alt={item.symbol} className="w-full h-full object-contain p-0.5" onError={e => { e.currentTarget.style.opacity='0'; }} />
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: assetObj?.color ?? '#64748b' }}>{item.symbol[0]}</div>
+                          )}
+                          <div>
+                            <div className="font-bold text-sm">{item.symbol}</div>
+                            <div className="text-[10px] text-muted-foreground tabular-nums">{fmtAmount} adet</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-sm tabular-nums">{currencySymbol}{totalValue.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div className={`text-xs font-bold tabular-nums ${isGain ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {isGain ? '+' : ''}{currencySymbol}{Math.abs(pnlAbs).toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({isGain ? '+' : ''}{pnlPct.toFixed(2)}%)
+                          </div>
                         </div>
                       </div>
+                      {/* Avg buy price row */}
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-2">
+                        <span>Ort. Alış: <span className="font-semibold text-foreground tabular-nums">{currencySymbol}{avgBuyDisplay.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span></span>
+                        <span>Güncel: <span className="font-semibold text-foreground tabular-nums">{currencySymbol}{currentPrice.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span></span>
+                      </div>
+                      {/* P&L bar */}
+                      <div className="w-full h-1 bg-border rounded-full mb-3 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${isGain ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                          style={{ width: `${Math.min(100, Math.abs(pnlPct) * 2)}%` }}
+                        />
+                      </div>
+                      {/* Action buttons — visible on hover */}
+                      {assetObj && (
+                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => setAssetToAnalyze(assetObj)}
+                            className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-primary/10 text-primary text-[10px] font-bold rounded-lg hover:bg-primary hover:text-white transition-colors"
+                          >
+                            <Bot className="w-3 h-3" /> AI Analiz
+                          </button>
+                          <button
+                            onClick={() => openModal(assetObj, 'sell')}
+                            className="flex-1 py-1.5 bg-rose-500/10 text-rose-500 text-[10px] font-bold rounded-lg hover:bg-rose-500 hover:text-white transition-colors"
+                          >
+                            Sat
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -419,7 +502,21 @@ export default function InvestmentsTab({
             {/* List */}
             <div className="overflow-y-auto flex-1 divide-y divide-border">
               {isLoading ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground">Piyasalar Yükleniyor...</div>
+                <div className="divide-y divide-border">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="p-4 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full skeleton flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 skeleton rounded w-20" />
+                        <div className="h-2 skeleton rounded w-14" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-3 skeleton rounded w-16" />
+                        <div className="h-2 skeleton rounded w-10" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : activeList.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">Sonuç bulunamadı.</div>
               ) : (
@@ -511,36 +608,105 @@ export default function InvestmentsTab({
                 </button>
               </div>
               <form onSubmit={handleAction} className="p-6 space-y-4">
-                <div className="bg-secondary p-3 rounded-xl mb-4 text-center">
-                  <div className="text-sm text-muted-foreground">Güncel Fiyat</div>
-                  <div className="text-xl font-bold text-primary">{currencySymbol}{getAssetPrice(selectedAsset.id, currency).toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 4 })}</div>
+                {/* Asset price info */}
+                <div className="bg-secondary/60 border border-border rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {selectedAsset.imageUrl && (
+                      <div className="w-9 h-9 rounded-full overflow-hidden bg-white flex-shrink-0">
+                        <img src={selectedAsset.imageUrl} alt={selectedAsset.symbol} className="w-full h-full object-contain p-0.5" onError={e => { e.currentTarget.style.opacity='0'; }} />
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-bold text-sm">{selectedAsset.name}</div>
+                      <div className={`text-xs font-bold ${selectedAsset.change24h >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {selectedAsset.change24h >= 0 ? '+' : ''}{selectedAsset.change24h.toFixed(2)}% (24s)
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground">Güncel Fiyat</div>
+                    <div className="text-lg font-black text-primary tabular-nums">
+                      {currencySymbol}{getAssetPrice(selectedAsset.id, currency).toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 4 })}
+                    </div>
+                  </div>
                 </div>
 
+                {/* Amount input */}
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
-                    {modalAction === 'buy' ? `Kaç ${currency.toUpperCase()}'lik almak istiyorsunuz?` : `Kaç ${currency.toUpperCase()}'lik satmak istiyorsunuz?`}
+                  <label className="block text-xs font-medium text-muted-foreground mb-2">
+                    {modalAction === 'buy' ? `Ne kadar harcamak istiyorsunuz? (${currency.toUpperCase()})` : `Ne kadar değerinde satmak istiyorsunuz? (${currency.toUpperCase()})`}
                   </label>
                   <input
                     required
                     type="number"
                     step="0.01"
+                    min="0"
                     value={inputAmount}
                     onChange={e => setInputAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-background border border-border rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors text-lg font-bold"
+                    className="w-full bg-background border border-border rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors text-xl font-black tabular-nums"
                   />
-                  {modalAction === 'buy' && (
-                    <div className="text-xs text-muted-foreground mt-1 text-right">Kullanılabilir Bakiye: {currencySymbol}{displayBalance.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 2 })}</div>
-                  )}
-                  {modalAction === 'sell' && (
-                    <div className="text-xs text-muted-foreground mt-1 text-right">
-                      Sahip olduğunuz: {portfolio.find(p => p.coinId === selectedAsset.id)?.amount.toFixed(6) || 0} {selectedAsset.symbol}
+
+                  {/* Quick % buttons */}
+                  <div className="flex gap-2 mt-2">
+                    {modalAction === 'buy'
+                      ? [25, 50, 75, 100].map(pct => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setInputAmount(((displayBalance * pct) / 100).toFixed(2))}
+                            className="flex-1 py-1.5 text-[10px] font-bold bg-secondary hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
+                          >%{pct}</button>
+                        ))
+                      : (() => {
+                          const holdingItem = portfolio.find(p => p.coinId === selectedAsset.id);
+                          const holdingValue = holdingItem ? holdingItem.amount * getAssetPrice(selectedAsset.id, currency) : 0;
+                          return [25, 50, 75, 100].map(pct => (
+                            <button
+                              key={pct}
+                              type="button"
+                              onClick={() => setInputAmount(((holdingValue * pct) / 100).toFixed(2))}
+                              className="flex-1 py-1.5 text-[10px] font-bold bg-secondary hover:bg-rose-500/10 hover:text-rose-500 rounded-lg transition-colors"
+                            >{pct === 100 ? 'Max' : `%${pct}`}</button>
+                          ));
+                        })()
+                    }
+                  </div>
+
+                  {/* Coin quantity preview */}
+                  {inputAmount && parseFloat(inputAmount) > 0 && (
+                    <div className="mt-2 p-2.5 bg-primary/5 border border-primary/10 rounded-xl flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Alınacak miktar:</span>
+                      <span className="text-xs font-bold tabular-nums">
+                        ≈ {(parseFloat(inputAmount) / getAssetPrice(selectedAsset.id, currency)).toLocaleString(undefined, { maximumSignificantDigits: 5 })} {selectedAsset.symbol}
+                      </span>
                     </div>
                   )}
+
+                  {modalAction === 'buy' && (
+                    <div className="text-xs text-muted-foreground mt-1.5 text-right">
+                      Kullanılabilir: <span className="font-bold text-foreground tabular-nums">{currencySymbol}{displayBalance.toLocaleString(currency === 'try' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  {modalAction === 'sell' && (() => {
+                    const holdingItem = portfolio.find(p => p.coinId === selectedAsset.id);
+                    return holdingItem ? (
+                      <div className="text-xs text-muted-foreground mt-1.5 text-right">
+                        Elinde: <span className="font-bold text-foreground tabular-nums">{holdingItem.amount.toLocaleString(undefined, { maximumSignificantDigits: 5 })} {selectedAsset.symbol}</span>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
 
-                <button type="submit" className={`w-full py-3 mt-2 font-bold rounded-xl transition-all active:scale-[0.98] cursor-pointer ${modalAction === 'buy' ? 'bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/20' : 'bg-rose-500 text-white hover:bg-rose-600 shadow-lg shadow-rose-500/20'}`}>
-                  {modalAction === 'buy' ? 'Alımı Onayla' : 'Satışı Onayla'}
+                <button
+                  type="submit"
+                  className={`w-full py-3.5 mt-1 font-bold rounded-xl transition-all active:scale-[0.98] cursor-pointer text-sm ${
+                    modalAction === 'buy'
+                      ? 'bg-primary text-white hover:bg-primary/90 shadow-lg shadow-primary/20'
+                      : 'bg-rose-500 text-white hover:bg-rose-600 shadow-lg shadow-rose-500/20'
+                  }`}
+                >
+                  {modalAction === 'buy' ? '✓ Alımı Onayla' : '✓ Satışı Onayla'}
                 </button>
               </form>
             </motion.div>
