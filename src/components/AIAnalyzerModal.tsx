@@ -555,79 +555,82 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
                   if (!title) return null;
 
                   return (
-                    <div key={idx} className="bg-secondary/15 border border-border/50 rounded-2xl p-6 transition-all hover:border-primary/20">
-                      <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                        {title === 'Piyasa Görünümü' && <Activity className="w-4 h-4" />}
-                        {title === 'Bütünleşik Analiz' && <BarChart3 className="w-4 h-4" />}
-                        {title === 'Temel Katalizörler' && <TrendingUp className="w-4 h-4" />}
-                        {title === 'Risk Faktörleri' && <TrendingDown className="w-4 h-4" />}
-                        {title === 'Analist Sonucu' && <Bot className="w-4 h-4" />}
-                        {title}
-                      </h3>
-                      
-                      {title === 'Temel Katalizörler' || title === 'Risk Faktörleri' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {content.map((l, i) => (
-                            <div key={i} className={`p-3 rounded-xl border flex gap-3 items-start ${title === 'Temel Katalizörler' ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-rose-500/5 border-rose-500/10'}`}>
-                               <div className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${title === 'Temel Katalizörler' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                               <p className="text-sm text-foreground/85 leading-relaxed">{l.replace('• ', '')}</p>
+                    <>
+                      <div key={idx} className="bg-secondary/15 border border-border/50 rounded-2xl p-6 transition-all hover:border-primary/20">
+                        <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                          {title === 'Piyasa Görünümü' && <Activity className="w-4 h-4" />}
+                          {title === 'Bütünleşik Analiz' && <BarChart3 className="w-4 h-4" />}
+                          {title === 'Temel Katalizörler' && <TrendingUp className="w-4 h-4" />}
+                          {title === 'Risk Faktörleri' && <TrendingDown className="w-4 h-4" />}
+                          {title === 'Analist Sonucu' && <Bot className="w-4 h-4" />}
+                          {title}
+                        </h3>
+                        
+                        {title === 'Temel Katalizörler' || title === 'Risk Faktörleri' ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {content.map((l, i) => (
+                              <div key={i} className={`p-3 rounded-xl border flex gap-3 items-start ${title === 'Temel Katalizörler' ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-rose-500/5 border-rose-500/10'}`}>
+                                 <div className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${title === 'Temel Katalizörler' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                 <p className="text-sm text-foreground/85 leading-relaxed">{l.replace('• ', '')}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {content.map((l, i) => {
+                              if (l.includes('⚠️')) return <p key={i} className="text-sm text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 leading-relaxed">{l}</p>;
+                              return <p key={i} className="text-sm text-foreground/80 leading-relaxed italic last:not-italic">{l}</p>;
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Chart injected between Piyasa Görünümü and Bütünleşik Analiz ── */}
+                      {idx === 0 && chartData.length > 0 && (
+                        <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6">
+                          <div className="flex justify-between items-center mb-6">
+                            <div>
+                              <h3 className="text-sm font-bold flex items-center gap-2"><Activity className="w-4 h-4" /> Zaman Serisi Projeksiyonu</h3>
+                              <p className="text-xs text-muted-foreground mt-1">Holt-Winters Damped Trend Modeli · 90G Geçmiş + 30G Tahmin</p>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {content.map((l, i) => {
-                            if (l.includes('⚠️')) return <p key={i} className="text-sm text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 leading-relaxed">{l}</p>;
-                            return <p key={i} className="text-sm text-foreground/80 leading-relaxed italic last:not-italic">{l}</p>;
-                          })}
+                            <div className="flex gap-4 text-[10px] font-medium">
+                              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Geçmiş</div>
+                              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-500" /> Tahmin</div>
+                            </div>
+                          </div>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                  <linearGradient id="gradHistory" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                  </linearGradient>
+                                  <linearGradient id="gradForecast" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                  </linearGradient>
+                                </defs>
+                                <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={14} stroke="#64748b" />
+                                <YAxis tick={{ fontSize: 9 }} domain={['auto', 'auto']} stroke="#64748b" tickFormatter={(v: number) => `${asset.currencySymbol}${v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)}`} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', fontSize: '12px' }} formatter={(value: any) => [`${asset.currencySymbol}${Number(value).toLocaleString(asset.currencySymbol === '₺' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 2 })}`, '']} labelStyle={{ color: '#94a3b8' }} />
+                                {forecastStart && <ReferenceLine x={forecastStart} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: "Bugün", fill: "#f59e0b", fontSize: 10, position: "top" }} />}
+                                <Area type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2} fill="url(#gradHistory)" dot={false} name="Geçmiş" connectNulls={false} />
+                                <Area type="monotone" dataKey="forecast" stroke="#6366f1" strokeWidth={2} strokeDasharray="6 3" fill="url(#gradForecast)" dot={false} name="Tahmin" connectNulls={false} />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex items-center justify-center gap-6 mt-2 text-[10px] text-muted-foreground">
+                            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded" /> Geçmiş Fiyat (90 gün)</span>
+                            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-indigo-500 inline-block rounded" style={{ borderBottom: '1px dashed' }} /> AI Tahmin (30 gün)</span>
+                          </div>
                         </div>
                       )}
-                    </div>
+                    </>
                   );
                 })}
               </div>
 
-              {/* Time Series Forecast Chart */}
-              {chartData.length > 0 && (
-                <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h3 className="text-sm font-bold flex items-center gap-2"><Activity className="w-4 h-4" /> Zaman Serisi Projeksiyonu</h3>
-                      <p className="text-xs text-muted-foreground mt-1">Holt-Winters Damped Trend Modeli · 90G Geçmiş + 30G Tahmin</p>
-                    </div>
-                    <div className="flex gap-4 text-[10px] font-medium">
-                      <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Geçmiş</div>
-                      <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-500" /> Tahmin</div>
-                    </div>
-                  </div>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="gradHistory" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                          </linearGradient>
-                          <linearGradient id="gradForecast" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={14} stroke="#64748b" />
-                        <YAxis tick={{ fontSize: 9 }} domain={['auto', 'auto']} stroke="#64748b" tickFormatter={(v: number) => `${asset.currencySymbol}${v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)}`} />
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', fontSize: '12px' }} formatter={(value: any) => [`${asset.currencySymbol}${Number(value).toLocaleString(asset.currencySymbol === '₺' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 2 })}`, '']} labelStyle={{ color: '#94a3b8' }} />
-                        {forecastStart && <ReferenceLine x={forecastStart} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: "Bugün", fill: "#f59e0b", fontSize: 10, position: "top" }} />}
-                        <Area type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2} fill="url(#gradHistory)" dot={false} name="Geçmiş" connectNulls={false} />
-                        <Area type="monotone" dataKey="forecast" stroke="#6366f1" strokeWidth={2} strokeDasharray="6 3" fill="url(#gradForecast)" dot={false} name="Tahmin" connectNulls={false} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex items-center justify-center gap-6 mt-2 text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded"></span> Geçmiş Fiyat (90 gün)</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-indigo-500 inline-block rounded" style={{ borderBottom: '1px dashed' }}></span> AI Tahmin (30 gün)</span>
-                  </div>
-                </div>
-              )}
 
               {/* Predictions */}
               <div>
