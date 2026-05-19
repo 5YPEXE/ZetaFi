@@ -215,8 +215,10 @@ export default function Home() {
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
   const getHeaderContent = () => {
+    const userName = user?.email ? user.email.split('@')[0].charAt(0).toUpperCase() + user.email.split('@')[0].slice(1) : 'Yatırımcı';
+    
     switch(activeTab) {
-      case 'dashboard':    return { title: "Hoş Geldin, Umut 👋",         desc: "İşte bu ayki finansal özetin." };
+      case 'dashboard':    return { title: `Hoş Geldin, ${userName} 👋`,         desc: "İşte bu ayki finansal özetin." };
       case 'planning':     return { title: "Finansal Planlama 🎯",          desc: "Hedeflerini belirle ve borçlarını stratejik olarak yönet." };
       case 'investments':  return { title: "Piyasalar & Portföyüm 📈",      desc: "Yatırımlarını takip et ve yeni fırsatları keşfet." };
       case 'transactions': return { title: "İşlem Geçmişi 💸",              desc: "Tüm gelir, gider ve bütçe hareketlerin." };
