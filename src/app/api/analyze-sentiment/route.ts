@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+// Netlify timeout sorununu çözmek için maksimum süre
+export const maxDuration = 30;
+
+const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 dakika
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const SYMBOL_TO_CG_ID: Record<string, string> = {
   BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
@@ -47,7 +57,8 @@ function buildPriceSummary(history: { prices: [number, number][] }): string {
   const last7 = prices.slice(-7);
   const upDays = last7.filter((p, i) => i > 0 && p > last7[i - 1]).length;
   const downDays = last7.filter((p, i) => i > 0 && p < last7[i - 1]).length;
-  const trendText = upDays >= 5 ? 'Güçlü yükseliş' : downDays >= 5 ? 'Güçlü düşüş' : upDays > downDays ? 'Hafif yükseliş' : downDays > upDays ? 'Hafif düşüş' : 'Yatay/kararsız';
+  const trendText = upDays >= 5 ? 'Güçlü yükseliş' : downDays >= 5 ? 'Güçlü düşüş'
+    : upDays > downDays ? 'Hafif yükseliş' : downDays > upDays ? 'Hafif düşüş' : 'Yatay/kararsız';
   return [
     `30 gün önce: $${first.toFixed(2)}`,
     `15 gün önce: $${mid.toFixed(2)}`,
@@ -61,102 +72,96 @@ function buildPriceSummary(history: { prices: [number, number][] }): string {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { headlines, symbol, technicalMetrics } = body as {
+    const { headlines, symbol, technicalMetrics, requestedBy, forceRefresh } = body as {
       headlines: string[];
       symbol: string;
       technicalMetrics?: TechnicalMetrics;
+      requestedBy?: string;
+      forceRefresh?: boolean;
     };
 
     if (!headlines || headlines.length === 0) {
       return NextResponse.json({ score: 0, reasoning: 'Haber bulunamadı.', report: null });
     }
 
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Gemini API anahtarı bulunamadı.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Gemini API anahtarı bulunamadı.' }, { status: 400 });
     }
 
-    // Geçmiş fiyat verisini çek
+    // ── 1. CACHE KONTROLÜ ─────────────────────────────────────────
+    if (!forceRefresh) {
+      const cutoff = new Date(Date.now() - CACHE_DURATION_MS).toISOString();
+      const { data: cached } = await supabase
+        .from('ai_analysis_cache')
+        .select('*')
+        .eq('symbol', symbol.toUpperCase())
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (cached) {
+        return NextResponse.json({
+          ...cached.analysis,
+          fromCache: true,
+          cachedBy: cached.requested_by,
+          cachedAt: cached.created_at,
+        });
+      }
+    }
+
+    // ── 2. GEMİNİ API ÇAĞRISI ─────────────────────────────────────
     const priceHistory = await fetchPriceHistory(symbol);
     const hasPriceData = !!priceHistory && priceHistory.prices.length > 0;
     const priceSummary = hasPriceData
       ? buildPriceSummary(priceHistory!)
-      : 'Bu varlık için geçmiş fiyat verisi mevcut değil (BIST hissesi veya emtia olabilir).';
+      : 'Bu varlık için geçmiş fiyat verisi mevcut değil.';
 
     const tm = technicalMetrics;
-
-    // Eğer teknik metrikler varsa → tam rapor üret
-    // Eğer yoksa → sadece sentiment skoru üret (fallback)
     const fullReportMode = !!tm;
+
+    // Haberleri sadece ilk 10'a limitleyerek prompt boyutunu azalt
+    const limitedHeadlines = headlines.slice(0, 10);
 
     const prompt = fullReportMode ? `
 Sen kurumsal düzeyde bir finansal analist yapay zekasısın.
-Aşağıdaki 4 veri kaynağını bütünleşik olarak analiz et ve profesyonel bir rapor üret.
+Aşağıdaki veri kaynaklarını bütünleşik olarak analiz et ve profesyonel bir rapor üret.
 
-═══════════════════════════════════
-VARLIK: ${tm!.name} (${symbol})
-GÜNCEL FİYAT: ${tm!.currencySymbol}${tm!.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 4 })}
-24S DEĞİŞİM: ${tm!.change24h >= 0 ? '+' : ''}${tm!.change24h.toFixed(2)}%
-═══════════════════════════════════
+VARLIK: ${tm!.name} (${symbol}) | FİYAT: ${tm!.currencySymbol}${tm!.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 4 })} | 24S: ${tm!.change24h >= 0 ? '+' : ''}${tm!.change24h.toFixed(2)}%
 
-📰 HABER ANALİZİ (${headlines.length} haber):
-${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+📰 HABERLER (${limitedHeadlines.length} adet):
+${limitedHeadlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}
 
-📊 30 GÜNLÜK FİYAT HAREKETİ:
+📊 30 GÜNLÜK FİYAT:
 ${priceSummary}
 
-📈 TEKNİK GÖSTERGELER (önceden hesaplanmış):
-- Teknik Trend: ${tm!.trendDir} (SMA10/SMA30 bazlı skor: ${tm!.trendScore > 0 ? '+' : ''}${tm!.trendScore})
-- RSI (14): ${tm!.rsiLabel} (değer: ~${tm!.rsiValue})
-- İstatistiksel Projeksiyon (Holt-Winters Damped Trend): ${tm!.forecastPct >= 0 ? '+' : ''}${tm!.forecastPct.toFixed(1)}% → ${tm!.forecastDir}
+📈 TEKNİK GÖSTERGELER:
+- Trend: ${tm!.trendDir} (skor: ${tm!.trendScore > 0 ? '+' : ''}${tm!.trendScore})
+- RSI (14): ${tm!.rsiLabel} (~${tm!.rsiValue})
+- Holt-Winters Projeksiyonu: ${tm!.forecastPct >= 0 ? '+' : ''}${tm!.forecastPct.toFixed(1)}% → ${tm!.forecastDir}
 
-═══════════════════════════════════
-ANALİZ TALİMATLARI:
-1. Haber tonunu değerlendir: Haberler genel olarak ne söylüyor?
-2. Fiyat hareketini değerlendir: 30 günlük trend ne yönde?
-3. Teknik durumu değerlendir: RSI ve trend birbirini destekliyor mu?
-4. İstatistiksel modelin öngörüsünü değerlendir.
-5. Tüm bunları SENTEZLEYEREk tek bir bütünsel görüş oluştur.
-6. Çelişkili sinyaller varsa mutlaka belirt (örn: haberler pozitif ama fiyat düşüyorsa).
-7. Raporu TÜM TÜRK FİNANS YATIRIMCILARI için profesyonel ama anlaşılır bir dilde yaz.
+TALİMATLAR: Haber tonu, fiyat hareketi ve teknik göstergeleri sentezle. Çelişkili sinyaller varsa ⚠️ ile belirt.
 
-SADECE VE SADECE AŞAĞIDAKİ JSON FORMATINDA YANIT VER:
+SADECE JSON DÖNDÜR:
 {
-  "score": <-100 ile +100 arası sayı, 0=nötr>,
-  "posCount": <pozitif haber sayısı>,
-  "negCount": <negatif haber sayısı>,
-  "neutralCount": <nötr haber sayısı>,
-  "priceSignal": <"Haberlerle Uyumlu" | "Haberlerle Çelişiyor" | "Veri Yok">,
-  "report": {
-    "marketOutlook": "<Genel piyasa görünümü: 2-3 cümle. Boğa/Ayı/Nötr yönü ve sebebi.>",
-    "integratedAnalysis": "<Haber duygusu + fiyat hareketi + teknik göstergeler + istatistiksel model BİRLİKTE yorumlanmış 3-4 cümle. Çelişkili sinyaller varsa ⚠️ ile belirt.>",
-    "catalysts": ["<katalizör 1>", "<katalizör 2>", "<katalizör 3>"],
-    "risks": ["<risk 1>", "<risk 2>", "<risk 3>"],
-    "analystConclusion": "<Analist sonucu: tüm faktörleri özetleyen, kesin bir görüş bildiren 2-3 cümle. Yatırım tavsiyesi olmadığını belirt.>"
-  }
-}
-` : `
-Sen kurumsal bir finansal analist AI'sın. Aşağıdaki haber başlıklarını ${symbol} varlığı için analiz et.
-Piyasa üzerindeki etkisini -100 ile +100 arasında puanla.
-
-Haberler:
-${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}
-
-${hasPriceData ? `30 Günlük Fiyat Hareketi:\n${priceSummary}` : ''}
-
-SADECE JSON FORMATINDA YANIT VER:
-{
-  "score": <sayı>,
+  "score": <-100 ile +100>,
   "posCount": <sayı>,
   "negCount": <sayı>,
   "neutralCount": <sayı>,
   "priceSignal": <"Haberlerle Uyumlu" | "Haberlerle Çelişiyor" | "Veri Yok">,
-  "reasoning": "<2 cümlelik yorum>"
-}
-`;
+  "report": {
+    "marketOutlook": "<2-3 cümle genel görünüm>",
+    "integratedAnalysis": "<3-4 cümle bütünleşik analiz, çelişki varsa ⚠️ ile>",
+    "catalysts": ["<katalizör 1>", "<katalizör 2>", "<katalizör 3>"],
+    "risks": ["<risk 1>", "<risk 2>", "<risk 3>"],
+    "analystConclusion": "<2-3 cümle kesin analist sonucu, yatırım tavsiyesi olmadığını belirt>"
+  }
+}` : `
+Sen finansal analist AI'sın. ${symbol} için haberleri analiz et, -100/+100 arası puan ver.
+Haberler: ${limitedHeadlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+${hasPriceData ? `30G Fiyat: ${priceSummary}` : ''}
+SADECE JSON: {"score":<sayı>,"posCount":<sayı>,"negCount":<sayı>,"neutralCount":<sayı>,"priceSignal":"Veri Yok","report":null}`;
 
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -165,8 +170,9 @@ SADECE JSON FORMATINDA YANIT VER:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.25, responseMimeType: 'application/json' },
+          generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
         }),
+        signal: AbortSignal.timeout(25000), // 25 saniye timeout
       }
     );
 
@@ -174,20 +180,34 @@ SADECE JSON FORMATINDA YANIT VER:
 
     const data = await res.json();
     const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!responseText) throw new Error('Gemini API returned empty text');
+    if (!responseText) throw new Error('Gemini boş yanıt döndürdü');
 
     const parsed = JSON.parse(responseText);
 
-    return NextResponse.json({
+    const result = {
       score: parsed.score || 0,
       pos: parsed.posCount || 0,
       neg: parsed.negCount || 0,
       neutral: parsed.neutralCount || 0,
       priceSignal: parsed.priceSignal || 'Veri Yok',
-      reasoning: parsed.reasoning || parsed.report?.integratedAnalysis || '',
       report: parsed.report || null,
       hasPriceData,
+      fromCache: false,
+      cachedBy: null,
+      cachedAt: null,
+    };
+
+    // ── 3. SUPABASE'E KAYDET ──────────────────────────────────────
+    const displayName = requestedBy || 'Anonim';
+    await supabase.from('ai_analysis_cache').insert({
+      symbol: symbol.toUpperCase(),
+      analysis: result,
+      requested_by: displayName,
+    }).then(({ error }) => {
+      if (error) console.warn('Cache kaydetme hatası:', error.message);
     });
+
+    return NextResponse.json(result);
 
   } catch (error) {
     console.error('Sentiment API Error:', error);

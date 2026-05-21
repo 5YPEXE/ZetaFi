@@ -1,14 +1,16 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { X, Bot, Activity, TrendingUp, TrendingDown, Clock, Newspaper, ExternalLink, Wifi, WifiOff, BarChart3 } from "lucide-react";
+import { X, Bot, Activity, TrendingUp, TrendingDown, Clock, Newspaper, ExternalLink, Wifi, WifiOff, BarChart3, RefreshCw } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { supabase } from "../lib/supabase";
 
 type NewsItem = { id: number; title: string; source: string; time: string; exactDate: string; url: string; isLive: boolean; publishedAt: number };
 type ChartPoint = { date: string; price?: number; forecast?: number };
 type AIAnalyzerModalProps = {
   asset: { id: string; name: string; symbol: string; currentPrice: number; currencySymbol: string; change24h: number; sparkline?: { value: number }[]; };
   usdRate?: number;
+  currentUser?: { email?: string; user_metadata?: { display_name?: string } } | null;
   onClose: () => void;
 };
 
@@ -188,16 +190,18 @@ const analyzeWithGemini = async (
     trendScore: number; trendDir: string; rsiLabel: string; rsiValue: number;
     forecastPct: number; forecastDir: string; change24h: number;
     currentPrice: number; currencySymbol: string; name: string;
-  }
+  },
+  requestedBy?: string,
+  forceRefresh?: boolean,
 ) => {
-  const empty = { score: 0, pos: 0, neg: 0, neutral: 0, priceSignal: 'Veri Yok' as string, reasoning: '', geminiReport: null as GeminiReport | null };
+  const empty = { score: 0, pos: 0, neg: 0, neutral: 0, priceSignal: 'Veri Yok' as string, reasoning: '', geminiReport: null as GeminiReport | null, fromCache: false, cachedBy: null as string | null, cachedAt: null as string | null };
   if (items.length === 0) return empty;
 
   try {
     const res = await fetch('/api/analyze-sentiment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ headlines: items.map(i => i.title), symbol, technicalMetrics })
+      body: JSON.stringify({ headlines: items.map(i => i.title), symbol, technicalMetrics, requestedBy, forceRefresh })
     });
     if (res.ok) {
       const data = await res.json();
@@ -207,8 +211,11 @@ const analyzeWithGemini = async (
         neg: data.neg ?? 0,
         neutral: data.neutral ?? 0,
         priceSignal: (data.priceSignal as string) || 'Veri Yok',
-        reasoning: (data.reasoning as string) || '',
+        reasoning: '',
         geminiReport: (data.report as GeminiReport) || null,
+        fromCache: !!data.fromCache,
+        cachedBy: (data.cachedBy as string) || null,
+        cachedAt: (data.cachedAt as string) || null,
       };
     }
   } catch (e) { console.warn('Gemini API failed, using local NLP fallback.'); }
@@ -217,7 +224,7 @@ const analyzeWithGemini = async (
   let pos = 0, neg = 0;
   items.forEach(i => { const l = i.title.toLowerCase(); const p = POS_KW.filter(k => l.includes(k)).length; const n = NEG_KW.filter(k => l.includes(k)).length; if (p > n) pos++; else if (n > p) neg++; });
   const total = Math.max(1, items.length);
-  return { score: ((pos - neg) / total) * 100, pos, neg, neutral: items.length - pos - neg, priceSignal: 'Veri Yok' as string, reasoning: '', geminiReport: null };
+  return { score: ((pos - neg) / total) * 100, pos, neg, neutral: items.length - pos - neg, priceSignal: 'Veri Yok' as string, reasoning: '', geminiReport: null, fromCache: false, cachedBy: null, cachedAt: null };
 };
 
 const calculateSMA = (prices: number[], period: number) => {
@@ -308,16 +315,26 @@ const computeMetrics = (price: number, change24h: number, historicalPrices: numb
 };
 
 // ==================== COMPONENT ====================
-export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAnalyzerModalProps) {
+export default function AIAnalyzerModal({ asset, usdRate = 38.5, currentUser, onClose }: AIAnalyzerModalProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [loadingText, setLoadingText] = useState("KAP ve Global Haberler Taranıyor...");
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isNewsLive, setIsNewsLive] = useState(false);
   const [pred, setPred] = useState<Pred | null>(null);
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
-  const [forecastStart, setForecastStart] = useState("");
+  const [forecastStart, setForecastStart] = useState('');
+  const [cacheInfo, setCacheInfo] = useState<{ fromCache: boolean; cachedBy: string | null; cachedAt: string | null }>({ fromCache: false, cachedBy: null, cachedAt: null });
 
-  useEffect(() => {
+  const getUserDisplayName = () => {
+    if (!currentUser) return 'Anonim';
+    return (currentUser.user_metadata as Record<string, string>)?.display_name
+      || currentUser.email?.split('@')[0] || 'Kullanıcı';
+  };
+
+  const runAnalysis = async (forceRefresh = false) => {
+    setIsAnalyzing(true);
+    setPred(null);
+    setLoadingText('KAP ve Global Haberler Taranıyor...');
     const run = async () => {
       const isTry = asset.currencySymbol === '₺';
 
@@ -361,7 +378,9 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
         currentPrice: asset.currentPrice,
         currencySymbol: asset.currencySymbol,
         name: asset.name,
-      });
+      }, getUserDisplayName(), forceRefresh);
+
+      setCacheInfo({ fromCache: ns.fromCache, cachedBy: ns.cachedBy, cachedAt: ns.cachedAt });
 
       // 5. Zaman serisini Gemini skoru ile yeniden hesapla (daha doğru tahmin)
       if (hist.prices.length > 10) {
@@ -396,12 +415,17 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
       setIsAnalyzing(false);
     };
     run();
+  };
+
+  useEffect(() => {
+    runAnalysis();
     const t1 = setTimeout(() => setLoadingText('3 Farklı Kaynaktan Haberler Taranıyor...'), 800);
     const t2 = setTimeout(() => setLoadingText('RSI/SMA ve Holt-Winters Modeli Hesaplanıyor...'), 1800);
     const t3 = setTimeout(() => setLoadingText('Tüm Metrikler Gemini AI\'e Gönderiliyor...'), 2800);
     const t4 = setTimeout(() => setLoadingText('Bütünleşik Analiz Raporu Oluşturuluyor...'), 3800);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
-  }, [asset.currentPrice, asset.name, asset.symbol, asset.change24h, asset.sparkline]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset.symbol]);
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-background/90 backdrop-blur-sm">
@@ -413,11 +437,30 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
               <Bot className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-bold flex items-center gap-2">ZetaFi AI Analisti <span className="px-2 py-0.5 bg-primary/20 text-primary text-[10px] rounded-full uppercase tracking-wider font-bold">v3.1</span></h2>
-              <p className="text-sm text-muted-foreground">{asset.name} ({asset.symbol}) · Kurumsal Düzey Analiz Raporu</p>
+              <h2 className="text-xl font-bold flex items-center gap-2">ZetaFi AI Analisti <span className="px-2 py-0.5 bg-primary/20 text-primary text-[10px] rounded-full uppercase tracking-wider font-bold">v3.2</span></h2>
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-sm text-muted-foreground">{asset.name} ({asset.symbol}) · Kurumsal Düzey Analiz Raporu</p>
+                {!isAnalyzing && cacheInfo.fromCache && cacheInfo.cachedBy && cacheInfo.cachedAt && (
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] text-amber-400 font-medium">
+                    <Clock className="w-3 h-3" />
+                    {cacheInfo.cachedBy} • {new Date(cacheInfo.cachedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-secondary transition-colors relative z-10"><X className="w-5 h-5 text-muted-foreground" /></button>
+          <div className="flex items-center gap-2 relative z-10">
+            {!isAnalyzing && (
+              <button
+                onClick={() => runAnalysis(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground transition-colors"
+                title="Yeni analiz üret">
+                <RefreshCw className="w-3.5 h-3.5" />
+                Yenile
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-secondary transition-colors"><X className="w-5 h-5 text-muted-foreground" /></button>
+          </div>
         </div>
 
         {/* Content */}
