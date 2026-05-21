@@ -180,26 +180,44 @@ const fetchLiveNews = async (name: string, symbol: string): Promise<NewsItem[]> 
 const POS_KW = ['yükseliş','yükseldi','artış','arttı','rekor','pozitif','güçlü','destekliyor','iyimser','talep','alım','büyüme','kazanç','onay','patlama','toparlanma','rally','surge','bullish','gain','high','boost','profit','growth','teşvik','hızlandı','toplamaya','artıyor','hedef fiyat','bedelsiz','açık standart','kar','temettü','ihracat','verimli','dönüşüm','stratejik','ortaklık','genişleme','ralli','sıçrama','yükselen','güçleniyor','kârlılık','potansiyel','fırsat','upgrade','outperform','beat','exceed','strong','recovery','breakout','momentum','uptick','optimistic'];
 const NEG_KW = ['düşüş','düştü','azalış','kayıp','negatif','zayıf','baskı','endişe','risk','satış','kriz','çöküş','gerileme','crash','drop','bearish','loss','decline','fall','fear','selloff','düzeltme','sert','gerilim','oynaklık','tehdit','yasak','ceza','soruşturma','hack','iflas','daralma','küçülme','zarar','borç','temerrüt','resesyon','enflasyon','faiz artışı','belirsizlik','kaçış','panik','durgunluk','downgrade','underperform','miss','weak','correction','plunge','slump','concern','warning','volatile','pressure'];
 
-const analyzeNews = async (items: NewsItem[], symbol: string) => {
-  if (items.length === 0) return { score: 0, pos: 0, neg: 0, neutral: 0 };
-  
+// Tüm hesaplanmış metriklerle birlikte Gemini'ye tek büyük istek at
+const analyzeWithGemini = async (
+  items: NewsItem[],
+  symbol: string,
+  technicalMetrics: {
+    trendScore: number; trendDir: string; rsiLabel: string; rsiValue: number;
+    forecastPct: number; forecastDir: string; change24h: number;
+    currentPrice: number; currencySymbol: string; name: string;
+  }
+) => {
+  const empty = { score: 0, pos: 0, neg: 0, neutral: 0, priceSignal: 'Veri Yok' as string, reasoning: '', geminiReport: null as GeminiReport | null };
+  if (items.length === 0) return empty;
+
   try {
     const res = await fetch('/api/analyze-sentiment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ headlines: items.map(i => i.title), symbol })
+      body: JSON.stringify({ headlines: items.map(i => i.title), symbol, technicalMetrics })
     });
     if (res.ok) {
       const data = await res.json();
-      return { score: data.score, pos: data.pos, neg: data.neg, neutral: data.neutral };
+      return {
+        score: data.score ?? 0,
+        pos: data.pos ?? 0,
+        neg: data.neg ?? 0,
+        neutral: data.neutral ?? 0,
+        priceSignal: (data.priceSignal as string) || 'Veri Yok',
+        reasoning: (data.reasoning as string) || '',
+        geminiReport: (data.report as GeminiReport) || null,
+      };
     }
-  } catch (e) { console.warn("Gemini API failed, using local NLP."); }
+  } catch (e) { console.warn('Gemini API failed, using local NLP fallback.'); }
 
-  // Fallback to local keyword heuristic
+  // Fallback: yerel keyword heuristic
   let pos = 0, neg = 0;
   items.forEach(i => { const l = i.title.toLowerCase(); const p = POS_KW.filter(k => l.includes(k)).length; const n = NEG_KW.filter(k => l.includes(k)).length; if (p > n) pos++; else if (n > p) neg++; });
   const total = Math.max(1, items.length);
-  return { score: ((pos - neg) / total) * 100, pos, neg, neutral: items.length - pos - neg };
+  return { score: ((pos - neg) / total) * 100, pos, neg, neutral: items.length - pos - neg, priceSignal: 'Veri Yok' as string, reasoning: '', geminiReport: null };
 };
 
 const calculateSMA = (prices: number[], period: number) => {
@@ -246,97 +264,46 @@ const analyzeMomentum = (prices: number[], change24h: number) => {
   };
 };
 
-type Pred = { 
-  sentiment: string; 
-  score: number; 
-  reason: string; 
-  report: string;
-  details: { 
-    newsScore: number; trendScore: number; momScore: number; forecastScore: number; 
-    rsi: string; trendDir: string; posNews: number; negNews: number; neutralNews: number; forecastDir: string 
-  }; 
-  w1: number; m1: number; m3: number; w1P: number; m1P: number; m3P: number 
+type GeminiReport = {
+  marketOutlook: string;
+  integratedAnalysis: string;
+  catalysts: string[];
+  risks: string[];
+  analystConclusion: string;
 };
 
-const predict = (name: string, price: number, change24h: number, newsItems: NewsItem[], historicalPrices: number[], forecastPct: number = 0, ns: any): Pred => {
+type Pred = {
+  sentiment: string;
+  score: number;
+  reason: string;
+  geminiReport: GeminiReport | null; // Gemini'den gelen tam rapor
+  details: {
+    newsScore: number; trendScore: number; momScore: number; forecastScore: number;
+    rsi: string; trendDir: string; posNews: number; negNews: number; neutralNews: number; forecastDir: string;
+    priceSignal: string; confidenceLevel: string; volatilityState: string;
+  };
+  w1: number; m1: number; m3: number; w1P: number; m1P: number; m3P: number;
+};
+
+// Sadece sayısal hesapları yapar, rapor Gemini'den gelir
+const computeMetrics = (price: number, change24h: number, historicalPrices: number[], forecastPct: number, ns: any) => {
   const tr = analyzeTrend(historicalPrices);
   const mo = analyzeMomentum(historicalPrices, change24h);
-  
   const forecastScore = Math.max(-100, Math.min(100, forecastPct * 8));
   const forecastDir = forecastPct > 1 ? 'Yükseliş' : forecastPct < -1 ? 'Düşüş' : 'Yatay';
   const weighted = ns.score * 0.25 + tr.score * 0.20 + mo.score * 0.15 + forecastScore * 0.40;
   const finalScore = Math.max(0, Math.min(100, Math.round(50 + weighted / 2)));
   const bull = finalScore >= 50;
-  
   const vol = Math.max(2, Math.abs(change24h) * 1.2 + Math.abs(weighted) * 0.05);
   const volatilityState = vol > 8 ? 'Yüksek' : vol > 4 ? 'Orta' : 'Düşük';
   const confidenceLevel = finalScore >= 70 || finalScore <= 30 ? 'Yüksek' : finalScore >= 60 || finalScore <= 40 ? 'Orta' : 'Düşük';
-
   const w1 = bull ? (vol * 0.4 + (finalScore - 50) * 0.05) : -(vol * 0.35 + (50 - finalScore) * 0.05);
   const m1 = bull ? (vol * 1.2 + (finalScore - 50) * 0.15) : -(vol * 1.0 + (50 - finalScore) * 0.12);
   const m3 = bull ? (vol * 2.5 + (finalScore - 50) * 0.3) : -(vol * 2.0 + (50 - finalScore) * 0.25);
-
-  const sentimentLabel = ns.pos > ns.neg
-    ? `olumlu (${ns.pos} poz / ${ns.neg} neg)`
-    : ns.neg > ns.pos
-      ? `olumsuz (${ns.neg} neg / ${ns.pos} poz)`
-      : `nötr (dengeli)`;
-
-  const topNews = newsItems.slice(0, 3).map(n => `"${n.title.substring(0, 55)}${n.title.length > 55 ? '…' : ''}"`).join(' | ');
-  const signalConflict = (bull && tr.dir === 'Düşüş') || (!bull && tr.dir === 'Yükseliş')
-    || (ns.score > 30 && forecastDir === 'Düşüş') || (ns.score < -30 && forecastDir === 'Yükseliş');
-  const outlookLabel = finalScore >= 60 ? 'Yükseliş (Boğa)' : finalScore <= 40 ? 'Düşüş (Ayı)' : 'Nötr / Karışık';
-
-  // ── KURUMSAL ANALİST RAPORU ──────────────────────────────────────
-  // Kural: Yalnızca hesaplanan metriklerden türetilir. Uydurma veri yok.
-  const sections: string[] = [];
-
-  sections.push(`## Piyasa Görünümü`);
-  sections.push(`${name} için ${outlookLabel} görünümü tespit edilmiştir. Birleşik güven skoru: ${finalScore}/100 — Güven: ${confidenceLevel} | Volatilite: ${volatilityState}.`);
-
-  sections.push(`\n## Bütünleşik Analiz`);
-  let composite = `Teknik yapı ${tr.dir} eğiliminde olup momentum ${mo.rsi} bölgesinde seyrediyor (24s: ${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}%). `;
-  composite += `Haber duygusu ${sentimentLabel} olarak değerlendirildi`;
-  composite += topNews ? ` — öne çıkan başlıklar: ${topNews}. ` : `. `;
-  composite += `Holt-Winters sönümlü trend modeli 30 günlük projeksiyonda ${forecastPct >= 0 ? '+' : ''}${forecastPct.toFixed(1)}% (${forecastDir}) öngörüyor. `;
-  if (signalConflict) composite += `⚠️ Sinyal çelişkisi tespit edildi: haber duygusu ${ns.score > 0 ? 'pozitif' : 'negatif'} iken projeksiyon ${forecastDir.toLowerCase()} gösteriyor; güven baskılanmaktadır.`;
-  else composite += `Göstergeler birbiriyle tutarlı sinyal üretiyor.`;
-  sections.push(composite);
-
-  sections.push(`\n## Temel Katalizörler`);
-  const cats: string[] = [];
-  if (ns.pos > 0) cats.push(`${ns.pos} pozitif haber akışı alım baskısını destekleyebilir.`);
-  if (tr.dir === 'Yükseliş') cats.push(`Teknik trend yapısı yükselişi destekleyen ivme sergiliyor.`);
-  if (mo.rsi === 'Güçlü Alım' || mo.rsi === 'Aşırı Alım') cats.push(`Momentum göstergeleri güçlü alım sinyali üretiyor.`);
-  if (forecastDir === 'Yükseliş') cats.push(`İstatistiksel model ${forecastPct.toFixed(1)}% büyüme beklentisi hesaplıyor.`);
-  if (cats.length === 0) cats.push(`Mevcut veri seti güçlü katalizör sinyali üretmemektedir.`);
-  cats.forEach(c => sections.push(`• ${c}`));
-
-  sections.push(`\n## Risk Faktörleri`);
-  const risks: string[] = [];
-  if (ns.neg > 0) risks.push(`${ns.neg} negatif haber akışı satış baskısını besleyebilir.`);
-  if (volatilityState === 'Yüksek') risks.push(`Volatilite yüksek; ani fiyat hareketleri beklenebilir.`);
-  if (mo.rsi === 'Aşırı Alım') risks.push(`Aşırı alım bölgesi; kısa vadede kâr satışlı düzeltme riski artmış.`);
-  if (mo.rsi === 'Aşırı Satım') risks.push(`Aşırı satım bölgesinde likidite eksikliği sıçramayı engelleyebilir.`);
-  if (tr.dir === 'Düşüş') risks.push(`Teknik yapı düşüş eğilimini sürdürüyor.`);
-  if (signalConflict) risks.push(`Çelişkili sinyaller pozisyon yönetimini zorlaştırıyor; teyit beklenmeli.`);
-  if (risks.length === 0) risks.push(`Belirgin risk sinyali tespit edilmedi.`);
-  risks.forEach(r => sections.push(`• ${r}`));
-
-  sections.push(`\n## Tahmin Özeti`);
-  sections.push(`7G: ${w1 >= 0 ? '+' : ''}${w1.toFixed(2)}% | 30G: ${m1 >= 0 ? '+' : ''}${m1.toFixed(2)}% | Güven: ${confidenceLevel} | Volatilite: ${volatilityState}`);
-
-  sections.push(`\n## Analist Sonucu`);
-  sections.push(`${name} dört katmanlı analizde ${outlookLabel.toLowerCase()} görünüm sergilemekte olup ${confidenceLevel.toLowerCase()} güven düzeyinde değerlendirilmektedir. ${signalConflict ? 'Çelişkili sinyaller nedeniyle pozisyon alımında ek teyit önerilmektedir.' : 'Göstergeler genel olarak tutarlı seyretmektedir.'} Bu rapor yalnızca bilgilendirme amaçlıdır; yatırım tavsiyesi niteliği taşımamaktadır.`);
-
-  const report = sections.join('\n');
-  const reason = `📊 Duygu: ${sentimentLabel}. 📈 Trend: ${tr.dir}. ⚡ RSI: ${mo.rsi}. 🔮 Projeksiyon: ${forecastPct.toFixed(1)}%.`;
-
-  return { 
-    sentiment: finalScore >= 60 ? 'Boğa (Yükseliş)' : finalScore <= 40 ? 'Ayı (Düşüş)' : 'Nötr', 
-    score: finalScore, reason, report,
-    details: { newsScore: Math.round(ns.score), trendScore: Math.round(tr.score), momScore: Math.round(mo.score), forecastScore: Math.round(forecastScore), rsi: mo.rsi, trendDir: tr.dir, posNews: ns.pos, negNews: ns.neg, neutralNews: ns.neutral, forecastDir }, 
-    w1, m1, m3, w1P: price * (1 + w1/100), m1P: price * (1 + m1/100), m3P: price * (1 + m3/100) 
+  return {
+    tr, mo, forecastScore, forecastDir, finalScore, vol, volatilityState, confidenceLevel,
+    w1, m1, m3,
+    w1P: price * (1 + w1 / 100), m1P: price * (1 + m1 / 100), m3P: price * (1 + m3 / 100),
   };
 };
 
@@ -352,38 +319,86 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
 
   useEffect(() => {
     const run = async () => {
-      // Parallel: haberler + geçmiş fiyatlar
       const isTry = asset.currencySymbol === '₺';
+
+      // 1. Paralel: haberler + geçmiş fiyatlar
       const [live, hist] = await Promise.all([
         fetchLiveNews(asset.name, asset.symbol).catch(() => []),
         fetchHistoricalPrices(asset.id, asset.sparkline, asset.currentPrice, isTry, usdRate)
       ]);
-      const finalNews = live;
       setIsNewsLive(live.length > 0);
-      setNews(finalNews);
-      
-      const ns = await analyzeNews(finalNews, asset.symbol);
-      
-      // Time series forecast
+      setNews(live);
+
+      // 2. Zaman serisi hesapla (placeholder score=0 ile, sonra Gemini'den gelecek)
       let forecastPct = 0;
+      let chartHistorical: ChartPoint[] = [];
+      let chartForecast: ChartPoint[] = [];
       if (hist.prices.length > 10) {
-        const { historical, forecast } = forecastTimeSeries(hist.prices, hist.dates, 30, ns.score);
-        setForecastStart(historical[historical.length - 1]?.date || "");
+        const { historical, forecast } = forecastTimeSeries(hist.prices, hist.dates, 30, 0);
+        chartHistorical = historical;
+        chartForecast = forecast;
+        setForecastStart(historical[historical.length - 1]?.date || '');
         setChartData([...historical, ...forecast]);
-        // Tahmin yönünü hesapla: son gerçek fiyat vs 30 gün sonrası
         const lastReal = hist.prices[hist.prices.length - 1];
         const last30 = forecast[forecast.length - 1]?.forecast || lastReal;
         forecastPct = ((last30 - lastReal) / lastReal) * 100;
       }
-      // TÜM katmanlarla birlikte tahmin
-      setPred(predict(asset.name, asset.currentPrice, asset.change24h, finalNews, hist.prices, forecastPct, ns));
+
+      // 3. Teknik metrikleri hesapla
+      const tr = analyzeTrend(hist.prices);
+      const mo = analyzeMomentum(hist.prices, asset.change24h);
+      const forecastDir = forecastPct > 1 ? 'Yükseliş' : forecastPct < -1 ? 'Düşüş' : 'Yatay';
+
+      // 4. TÜM metrikleri Gemini'ye gönder → tek bütünleşik analiz
+      const ns = await analyzeWithGemini(live, asset.symbol, {
+        trendScore: Math.round(tr.score),
+        trendDir: tr.dir,
+        rsiLabel: mo.rsi,
+        rsiValue: mo.value,
+        forecastPct,
+        forecastDir,
+        change24h: asset.change24h,
+        currentPrice: asset.currentPrice,
+        currencySymbol: asset.currencySymbol,
+        name: asset.name,
+      });
+
+      // 5. Zaman serisini Gemini skoru ile yeniden hesapla (daha doğru tahmin)
+      if (hist.prices.length > 10) {
+        const { historical, forecast } = forecastTimeSeries(hist.prices, hist.dates, 30, ns.score);
+        setForecastStart(historical[historical.length - 1]?.date || '');
+        setChartData([...historical, ...forecast]);
+        const lastReal = hist.prices[hist.prices.length - 1];
+        const last30 = forecast[forecast.length - 1]?.forecast || lastReal;
+        forecastPct = ((last30 - lastReal) / lastReal) * 100;
+      }
+
+      // 6. Sayısal hesapları yap (w1/m1/m3 fiyat tahminleri)
+      const m = computeMetrics(asset.currentPrice, asset.change24h, hist.prices, forecastPct, ns);
+
+      setPred({
+        sentiment: m.finalScore >= 60 ? 'Boğa (Yükseliş)' : m.finalScore <= 40 ? 'Ayı (Düşüş)' : 'Nötr',
+        score: m.finalScore,
+        reason: `📊 Haber: ${ns.pos}+ / ${ns.neg}-. 📈 Trend: ${m.tr.dir}. ⚡ RSI: ${m.mo.rsi}. 🔮 Projeksiyon: ${forecastPct.toFixed(1)}%.`,
+        geminiReport: ns.geminiReport,
+        details: {
+          newsScore: Math.round(ns.score), trendScore: Math.round(m.tr.score),
+          momScore: Math.round(m.mo.score), forecastScore: Math.round(m.forecastScore),
+          rsi: m.mo.rsi, trendDir: m.tr.dir,
+          posNews: ns.pos, negNews: ns.neg, neutralNews: ns.neutral,
+          forecastDir: m.forecastDir, priceSignal: ns.priceSignal ?? 'Veri Yok',
+          confidenceLevel: m.confidenceLevel, volatilityState: m.volatilityState,
+        },
+        w1: m.w1, m1: m.m1, m3: m.m3,
+        w1P: m.w1P, m1P: m.m1P, m3P: m.m3P,
+      });
     };
     run();
-    const t1 = setTimeout(() => setLoadingText("3 Farklı Kaynaktan Haberler Taranıyor..."), 800);
-    const t2 = setTimeout(() => setLoadingText("Gelişmiş AI NLP ile Duygu Analizi Yapılıyor..."), 1800);
-    const t3 = setTimeout(() => setLoadingText("RSI/SMA ve 90 Günlük Model Hesaplanıyor..."), 2800);
-    const t4 = setTimeout(() => setLoadingText("4 Katmanlı Skor Birleştiriliyor..."), 3600);
-    const t5 = setTimeout(() => setIsAnalyzing(false), 4200);
+    const t1 = setTimeout(() => setLoadingText('3 Farklı Kaynaktan Haberler Taranıyor...'), 800);
+    const t2 = setTimeout(() => setLoadingText('RSI/SMA ve Holt-Winters Modeli Hesaplanıyor...'), 1800);
+    const t3 = setTimeout(() => setLoadingText('Tüm Metrikler Gemini AI\'e Gönderiliyor...'), 2800);
+    const t4 = setTimeout(() => setLoadingText('Bütünleşik Analiz Raporu Oluşturuluyor...'), 3800);
+    const t5 = setTimeout(() => setIsAnalyzing(false), 5500);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
   }, [asset.currentPrice, asset.name, asset.symbol, asset.change24h, asset.sparkline]);
 
@@ -487,9 +502,18 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
                 <div className="bg-secondary/30 border border-border rounded-2xl p-5 flex flex-col justify-center gap-3.5">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Model Kalitesi</p>
                   {[
-                    { label: 'Model Güveni', value: pred.report.match(/Güven: ([^|\n]+)/)?.[1]?.trim() ?? 'Orta', color: 'bg-primary/10 text-primary' },
-                    { label: 'Volatilite', value: pred.report.match(/Volatilite: ([^|$\n]+)/)?.[1]?.trim() ?? 'Düşük', color: 'bg-amber-500/10 text-amber-500' },
+                    { label: 'Model Güveni', value: pred.details.confidenceLevel ?? 'Orta', color: 'bg-primary/10 text-primary' },
+                    { label: 'Volatilite', value: pred.details.volatilityState ?? 'Düşük', color: 'bg-amber-500/10 text-amber-500' },
                     { label: 'Momentum', value: pred.details.rsi, color: pred.details.rsi.includes('Alım') ? 'bg-emerald-500/10 text-emerald-500' : pred.details.rsi.includes('Satım') ? 'bg-rose-500/10 text-rose-500' : 'bg-secondary text-muted-foreground' },
+                    { 
+                      label: 'Fiyat/Haber Uyumu', 
+                      value: pred.details.priceSignal ?? 'Veri Yok', 
+                      color: pred.details.priceSignal === 'Haberlerle Uyumlu' 
+                        ? 'bg-emerald-500/10 text-emerald-500' 
+                        : pred.details.priceSignal === 'Haberlerle Çelişiyor' 
+                          ? 'bg-rose-500/10 text-rose-500' 
+                          : 'bg-secondary text-muted-foreground' 
+                    },
                   ].map(row => (
                     <div key={row.label} className="flex justify-between items-center">
                       <span className="text-xs text-muted-foreground">{row.label}</span>
@@ -545,91 +569,135 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
                 </div>
               </div>
 
-              {/* Detailed Report Section */}
-              <div className="space-y-6">
-                {pred.report.split('\n\n').map((section, idx) => {
-                  const lines = section.split('\n');
-                  const title = lines[0].startsWith('## ') ? lines[0].replace('## ', '') : null;
-                  const content = title ? lines.slice(1) : lines;
+              {/* Detailed Report Section — Gemini'den gelen yapılandırılmış rapor */}
+              {pred.geminiReport ? (
+                <div className="space-y-6">
+                  {/* Piyasa Görünümü */}
+                  <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6 hover:border-primary/20 transition-all">
+                    <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <Activity className="w-4 h-4" /> Piyasa Görünümü
+                    </h3>
+                    <p className="text-sm text-foreground/80 leading-relaxed">{pred.geminiReport.marketOutlook}</p>
+                  </div>
 
-                  if (!title) return null;
-
-                  return (
-                    <React.Fragment key={idx}>
-                      <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6 transition-all hover:border-primary/20">
-                        <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                          {title === 'Piyasa Görünümü' && <Activity className="w-4 h-4" />}
-                          {title === 'Bütünleşik Analiz' && <BarChart3 className="w-4 h-4" />}
-                          {title === 'Temel Katalizörler' && <TrendingUp className="w-4 h-4" />}
-                          {title === 'Risk Faktörleri' && <TrendingDown className="w-4 h-4" />}
-                          {title === 'Analist Sonucu' && <Bot className="w-4 h-4" />}
-                          {title}
-                        </h3>
-                        
-                        {title === 'Temel Katalizörler' || title === 'Risk Faktörleri' ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {content.map((l, i) => (
-                              <div key={i} className={`p-3 rounded-xl border flex gap-3 items-start ${title === 'Temel Katalizörler' ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-rose-500/5 border-rose-500/10'}`}>
-                                 <div className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${title === 'Temel Katalizörler' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                                 <p className="text-sm text-foreground/85 leading-relaxed">{l.replace('• ', '')}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            {content.map((l, i) => {
-                              if (l.includes('⚠️')) return <p key={i} className="text-sm text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 leading-relaxed">{l}</p>;
-                              return <p key={i} className="text-sm text-foreground/80 leading-relaxed italic last:not-italic">{l}</p>;
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ── Chart injected between Piyasa Görünümü and Bütünleşik Analiz ── */}
-                      {idx === 0 && chartData.length > 0 && (
-                        <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6">
-                          <div className="flex justify-between items-center mb-6">
-                            <div>
-                              <h3 className="text-sm font-bold flex items-center gap-2"><Activity className="w-4 h-4" /> Zaman Serisi Projeksiyonu</h3>
-                              <p className="text-xs text-muted-foreground mt-1">Holt-Winters Damped Trend Modeli · 90G Geçmiş + 30G Tahmin</p>
-                            </div>
-                            <div className="flex gap-4 text-[10px] font-medium">
-                              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Geçmiş</div>
-                              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-500" /> Tahmin</div>
-                            </div>
-                          </div>
-                          <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                <defs>
-                                  <linearGradient id="gradHistory" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                  </linearGradient>
-                                  <linearGradient id="gradForecast" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                  </linearGradient>
-                                </defs>
-                                <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={14} stroke="#64748b" />
-                                <YAxis tick={{ fontSize: 9 }} domain={['auto', 'auto']} stroke="#64748b" tickFormatter={(v: number) => `${asset.currencySymbol}${v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)}`} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', fontSize: '12px' }} formatter={(value: any) => [`${asset.currencySymbol}${Number(value).toLocaleString(asset.currencySymbol === '₺' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 2 })}`, '']} labelStyle={{ color: '#94a3b8' }} />
-                                {forecastStart && <ReferenceLine x={forecastStart} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: "Bugün", fill: "#f59e0b", fontSize: 10, position: "top" }} />}
-                                <Area type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2} fill="url(#gradHistory)" dot={false} name="Geçmiş" connectNulls={false} />
-                                <Area type="monotone" dataKey="forecast" stroke="#6366f1" strokeWidth={2} strokeDasharray="6 3" fill="url(#gradForecast)" dot={false} name="Tahmin" connectNulls={false} />
-                              </AreaChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div className="flex items-center justify-center gap-6 mt-2 text-[10px] text-muted-foreground">
-                            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded" /> Geçmiş Fiyat (90 gün)</span>
-                            <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-indigo-500 inline-block rounded" style={{ borderBottom: '1px dashed' }} /> AI Tahmin (30 gün)</span>
-                          </div>
+                  {/* Grafik — Görünüm kartından hemen sonra */}
+                  {chartData.length > 0 && (
+                    <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6">
+                      <div className="flex justify-between items-center mb-6">
+                        <div>
+                          <h3 className="text-sm font-bold flex items-center gap-2"><Activity className="w-4 h-4" /> Zaman Serisi Projeksiyonu</h3>
+                          <p className="text-xs text-muted-foreground mt-1">Holt-Winters Damped Trend Modeli · 90G Geçmiş + 30G Tahmin</p>
                         </div>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
+                        <div className="flex gap-4 text-[10px] font-medium">
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Geçmiş</div>
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-500" /> Tahmin</div>
+                        </div>
+                      </div>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="gradHistory" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                              </linearGradient>
+                              <linearGradient id="gradForecast" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <XAxis dataKey="date" tick={{ fontSize: 9 }} interval={14} stroke="#64748b" />
+                            <YAxis tick={{ fontSize: 9 }} domain={['auto', 'auto']} stroke="#64748b" tickFormatter={(v: number) => `${asset.currencySymbol}${v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)}`} />
+                            <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', fontSize: '12px' }} formatter={(value: any) => [`${asset.currencySymbol}${Number(value).toLocaleString(asset.currencySymbol === '₺' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 2 })}`, '']} labelStyle={{ color: '#94a3b8' }} />
+                            {forecastStart && <ReferenceLine x={forecastStart} stroke="#f59e0b" strokeDasharray="4 4" label={{ value: "Bugün", fill: "#f59e0b", fontSize: 10, position: "top" }} />}
+                            <Area type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2} fill="url(#gradHistory)" dot={false} name="Geçmiş" connectNulls={false} />
+                            <Area type="monotone" dataKey="forecast" stroke="#6366f1" strokeWidth={2} strokeDasharray="6 3" fill="url(#gradForecast)" dot={false} name="Tahmin" connectNulls={false} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex items-center justify-center gap-6 mt-2 text-[10px] text-muted-foreground">
+                        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded" /> Geçmiş Fiyat (90 gün)</span>
+                        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-indigo-500 inline-block rounded" style={{ borderBottom: '1px dashed' }} /> AI Tahmin (30 gün)</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bütünleşik Analiz */}
+                  <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6 hover:border-primary/20 transition-all">
+                    <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4" /> Bütünleşik Analiz
+                    </h3>
+                    {pred.geminiReport.integratedAnalysis.includes('⚠️') ? (
+                      <p className="text-sm text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded-xl p-4 leading-relaxed">
+                        {pred.geminiReport.integratedAnalysis}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-foreground/80 leading-relaxed">{pred.geminiReport.integratedAnalysis}</p>
+                    )}
+                  </div>
+
+                  {/* Katalizörler & Riskler */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6 hover:border-emerald-500/20 transition-all">
+                      <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4" /> Temel Katalizörler
+                      </h3>
+                      <div className="space-y-2">
+                        {pred.geminiReport.catalysts.map((c, i) => (
+                          <div key={i} className="p-3 rounded-xl border bg-emerald-500/5 border-emerald-500/10 flex gap-3 items-start">
+                            <div className="mt-1 w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
+                            <p className="text-sm text-foreground/85 leading-relaxed">{c}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6 hover:border-rose-500/20 transition-all">
+                      <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <TrendingDown className="w-4 h-4" /> Risk Faktörleri
+                      </h3>
+                      <div className="space-y-2">
+                        {pred.geminiReport.risks.map((r, i) => (
+                          <div key={i} className="p-3 rounded-xl border bg-rose-500/5 border-rose-500/10 flex gap-3 items-start">
+                            <div className="mt-1 w-1.5 h-1.5 rounded-full shrink-0 bg-rose-500" />
+                            <p className="text-sm text-foreground/85 leading-relaxed">{r}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Analist Sonucu */}
+                  <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6 hover:border-primary/20 transition-all">
+                    <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <Bot className="w-4 h-4" /> Analist Sonucu
+                    </h3>
+                    <p className="text-sm text-foreground/80 leading-relaxed italic">{pred.geminiReport.analystConclusion}</p>
+                  </div>
+                </div>
+              ) : (
+                /* Fallback: Gemini raporu yoksa basit özet göster */
+                <div className="bg-secondary/15 border border-border/50 rounded-2xl p-6">
+                  <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <Activity className="w-4 h-4" /> Analiz Özeti
+                  </h3>
+                  <p className="text-sm text-foreground/70 leading-relaxed">{pred.reason}</p>
+                  {chartData.length > 0 && (
+                    <div className="mt-4 h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                          <XAxis dataKey="date" tick={{ fontSize: 8 }} interval={14} stroke="#64748b" />
+                          <YAxis tick={{ fontSize: 8 }} domain={['auto', 'auto']} stroke="#64748b" />
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '11px' }} />
+                          {forecastStart && <ReferenceLine x={forecastStart} stroke="#f59e0b" strokeDasharray="4 4" />}
+                          <Area type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2} fill="url(#gradHistory)" dot={false} />
+                          <Area type="monotone" dataKey="forecast" stroke="#6366f1" strokeWidth={2} strokeDasharray="6 3" fill="url(#gradForecast)" dot={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              )}
+
 
 
               {/* Predictions */}

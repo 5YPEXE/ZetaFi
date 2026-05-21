@@ -3,7 +3,7 @@
   <h1>ZetaFi</h1>
   <p><strong>Finansal Özgürlüğe Giden Oyunlaştırılmış Yolculuk</strong></p>
 
-  [![Netlify Status](https://api.netlify.com/api/v1/badges/b7a2d4b9-1d4a-4a6f-9988-51f7fb6ab137/deploy-status)](https://zetafi.netlify.app)
+
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 </div>
 
