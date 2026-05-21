@@ -392,14 +392,15 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
         w1: m.w1, m1: m.m1, m3: m.m3,
         w1P: m.w1P, m1P: m.m1P, m3P: m.m3P,
       });
+      // Analiz tamamlandığında yüklemeyi kapat
+      setIsAnalyzing(false);
     };
     run();
     const t1 = setTimeout(() => setLoadingText('3 Farklı Kaynaktan Haberler Taranıyor...'), 800);
     const t2 = setTimeout(() => setLoadingText('RSI/SMA ve Holt-Winters Modeli Hesaplanıyor...'), 1800);
     const t3 = setTimeout(() => setLoadingText('Tüm Metrikler Gemini AI\'e Gönderiliyor...'), 2800);
     const t4 = setTimeout(() => setLoadingText('Bütünleşik Analiz Raporu Oluşturuluyor...'), 3800);
-    const t5 = setTimeout(() => setIsAnalyzing(false), 5500);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
   }, [asset.currentPrice, asset.name, asset.symbol, asset.change24h, asset.sparkline]);
 
   return (
@@ -436,19 +437,14 @@ export default function AIAnalyzerModal({ asset, usdRate = 38.5, onClose }: AIAn
               {/* Step indicator */}
               <div className="space-y-3 w-full max-w-xs">
                 {[
-                  "KAP ve Global Haberler Taranıyor",
-                  "3 Kaynaktan Haber Analizi",
-                  "Gelişmiş NLP Duygu Analizi",
+                  "Haberler Taranıyor",
                   "RSI / SMA Hesaplama",
-                  "4 Katmanlı Skor Birleştirme"
+                  "Holt-Winters Modeli",
+                  "Gemini AI'e Gönderiliyor",
+                  "Rapor Oluşturuluyor"
                 ].map((step, i) => {
-                  const stepTimes = [800, 1800, 2800, 3600, 4200];
-                  const activeIdx = stepTimes.findIndex((t, ti) => {
-                    const next = stepTimes[ti + 1] ?? 9999;
-                    return loadingText.includes(step.split(' ')[0]) || loadingText === step;
-                  });
-                  const isDone = stepTimes[i] < 4200 && ["KAP","3 Kaynak","Gemini","RSI","4 Katman"].some(k => loadingText.includes(k) && ["3 Kaynak","Gemini","RSI","4 Katman"][i-1]);
-                  const isCurrent = loadingText.includes(["KAP","3 Fark","Gelişm","RSI/SMA","4 Katman"][i] ?? "");
+                  const stepTimes = [800, 1800, 2800, 3800, 5000];
+                  const isCurrent = loadingText.includes(['Haber', 'RSI', 'Holt', 'Metrik', 'Bütün'][i] ?? '');
                   return (
                     <div key={i} className="flex items-center gap-3">
                       <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all ${
