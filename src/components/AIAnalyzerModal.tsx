@@ -124,12 +124,25 @@ const fetchLiveNews = async (name: string, symbol: string): Promise<NewsItem[]> 
   const months = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
   const allItems: NewsItem[] = [];
   
-  const queries = [
-    `${name} ${symbol}`,                    // Türkçe genel
-    `${symbol} hisse borsa`,                // Borsa odaklı
-    `${symbol} stock price forecast`,       // İngilizce
+  // Varlık tipini belirle
+  const isCrypto = ['BTC','ETH','SOL','BNB','XRP','ADA','DOGE','AVAX','DOT','TRX','LINK','MATIC',
+    'SHIB','LTC','UNI','ATOM','XLM','NEAR','APT','SUI','PEPE','WIF','ARB','OP','INJ'].includes(symbol.toUpperCase());
+  const isBist = symbol.endsWith('.IS') || /^[A-Z]{3,5}$/.test(symbol) && !isCrypto && symbol.length <= 5;
+
+  const queries = isCrypto ? [
+    `${name} ${symbol} kripto`,                    // Türkçe kripto
+    `${name} cryptocurrency price news`,           // İngilizce kripto
+    `${symbol} crypto market analysis`,            // İngilizce analiz
+  ] : isBist ? [
+    `${name} hisse fiyat`,                         // BIST hisse
+    `${symbol} borsa yatırım`,                     // BIST genel
+    `${name} şirket haber`,                        // Şirket haberleri
+  ] : [
+    `${name} ${symbol}`,                           // Genel
+    `${symbol} price forecast`,                    // Fiyat tahmini
+    `${name} market news`,                         // Piyasa haberleri
   ];
-  
+
   const apiUrls = queries.map(q => `/api/news?q=${encodeURIComponent(q)}`);
 
   try {
